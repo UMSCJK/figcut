@@ -190,16 +190,18 @@ export function boot(opts = {}) {
   function thumbFor(no) {
     const p = stack.pages.find((x) => x.no === no);
     if (!p || !p.canvas || !p.canvas.width) return null;
+    const W = 300;
+    const H = Math.round((W * 842) / 595);
     const c = document.createElement('canvas');
-    c.width = 80;
-    c.height = 108;
+    c.width = W;
+    c.height = H;
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 80, 108);
-    const k = Math.min(80 / p.canvas.width, 108 / p.canvas.height);
+    ctx.fillRect(0, 0, W, H);
+    const k = Math.min(W / p.canvas.width, H / p.canvas.height);
     const w = p.canvas.width * k;
     const h = p.canvas.height * k;
-    ctx.drawImage(p.canvas, (80 - w) / 2, (108 - h) / 2, w, h);
+    ctx.drawImage(p.canvas, (W - w) / 2, (H - h) / 2, w, h);
     return c;
   }
 
@@ -211,11 +213,13 @@ export function boot(opts = {}) {
     const source = stackPage ? stackPage.canvas : null;
     const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === ed.page);
 
+    // 没选中时右栏不放大缩略图（那是左栏的活），只留区域列表
     if (sel) {
+      previewHost.hidden = false;
       const b = boundsOf(sel);
       renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
     } else {
-      renderPreview(preview, { source, pageW, pageH, selectedId: null, regions: regionsOfPage(ed.regions, ed.page) });
+      previewHost.hidden = true;
     }
 
     // 左栏：页码 + 标注数（只在签名变了才重建，画框拖动时不重排）
@@ -308,10 +312,10 @@ export function boot(opts = {}) {
   marginInput.title = '边距 pt（0–80）';
 
   const dpiLabel = doc.createElement('label');
-  dpiLabel.textContent = 'DPI';
+  dpiLabel.textContent = '分辨率 DPI';
   dpiLabel.appendChild(dpiInput);
   const marginLabel = doc.createElement('label');
-  marginLabel.textContent = '边距';
+  marginLabel.textContent = '边距 pt';
   marginLabel.appendChild(marginInput);
   settingsBox.append(dpiLabel, marginLabel);
   document.body.appendChild(settingsBox);
@@ -365,6 +369,7 @@ export function boot(opts = {}) {
 
   function markTool(tool) {
     for (const [name, btn] of toolButtons) btn.classList.toggle('is-active', name === tool);
+    shell.canvas.dataset.tool = tool;
   }
 
   const toolButton = (iconSvg, label, tool) => {
@@ -380,6 +385,7 @@ export function boot(opts = {}) {
   toolButton(ICONS.select, '选择 (V)', 'select');
   toolButton(ICONS.rect, '矩形 (R)', 'rect');
   toolButton(ICONS.poly, '多边形 (G)', 'poly');
+  markTool(ed.tool);
 
   function pointOf(ev) {
     const el = ev.target && ev.target.closest ? ev.target.closest('.page') : null;
@@ -452,13 +458,20 @@ export function boot(opts = {}) {
   // ---- 快捷键：统一走 app/shortcuts 的键表 ----
   const fitDims = () => {
     const ov = overlays.get(ed.page);
+    const el = stack.root;
+    const cs = getComputedStyle(el);
+    const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    // 扣掉 padding 与滚动条，这样"适应宽度"不会撑出横向滚动条
+    const scrollX = el.offsetWidth - el.clientWidth;
+    const scrollY = el.offsetHeight - el.clientHeight;
     return {
-      viewportW: shell.canvas.clientWidth || 800,
-      viewportH: shell.canvas.clientHeight || 600,
+      viewportW: Math.max(1, el.clientWidth - padX - scrollX),
+      viewportH: Math.max(1, el.clientHeight - padY - scrollY),
       pageW: ov ? ov.size.w : ed.pageW,
       pageH: ov ? ov.size.h : ed.pageH,
-      padX: 24,
-      padY: 24,
+      padX: 0,
+      padY: 0,
     };
   };
 

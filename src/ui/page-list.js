@@ -1,4 +1,4 @@
-// 左栏页面列表：缩略图 + 页码 + 标注数，当前页高亮
+// 左栏页面列表：大缩略图（Papers 那种）+ 页码 + 标注数
 // 状态：已实现。
 
 export function countByPage(regions) {
@@ -25,21 +25,25 @@ export function renderPageList(host, opts) {
     row.dataset.page = String(p.no);
     row.title = '第 ' + p.no + ' 页';
 
+    const frame = doc.createElement('div');
+    frame.className = 'page-frame';
+
     const thumb = thumbFor ? thumbFor(p.no) : null;
     if (thumb) {
       thumb.className = 'page-thumb';
-      row.appendChild(thumb);
+      frame.appendChild(thumb);
     }
 
     const num = doc.createElement('span');
     num.className = 'page-no';
     num.textContent = String(p.no);
+    frame.appendChild(num);
 
     const badge = doc.createElement('span');
     badge.className = 'page-count';
     badge.textContent = counts[p.no] ? String(counts[p.no]) : '';
 
-    row.append(num, badge);
+    row.append(frame, badge);
     row.addEventListener('click', () => onPick && onPick(p.no));
     list.appendChild(row);
   }

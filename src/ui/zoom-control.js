@@ -64,7 +64,8 @@ export function renderZoomControl(opts) {
     input.value = Math.round(z.scale * 100) + '%';
     const want = String(Number(z.scale.toFixed(4)));
     const has = Array.prototype.some.call(menu.options, (o) => o.value === want);
-    if (has) menu.value = want;
+    // 不在预设台阶上（比如适应页宽算出 157%）就清空，别显示一个假的 100%
+    menu.value = has ? want : '';
   };
   sync();
 

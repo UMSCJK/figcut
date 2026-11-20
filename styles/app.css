@@ -104,7 +104,7 @@ button { cursor: pointer; }
 }
 
 .icon-btn:hover { background: var(--hover); color: var(--text); }
-.icon-btn.on { background: var(--sel); color: var(--accent); }
+.icon-btn.on, .icon-btn.is-active { background: var(--sel); color: var(--accent); }
 .icon-btn svg, .btn svg { display: block; flex: none; }
 
 /* ---------- 三栏 ---------- */
@@ -149,6 +149,9 @@ button { cursor: pointer; }
   flex-direction: column;
   background: var(--view);
 }
+
+.canvas[data-tool="rect"] .pages,
+.canvas[data-tool="poly"] .pages { cursor: crosshair; }
 
 .pages {
   flex: 1;
@@ -286,37 +289,57 @@ button { cursor: pointer; }
 
 .page-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
-  min-height: 62px;
-  padding: 4px 8px;
+  padding: 6px;
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: 8px;
   background: transparent;
   color: var(--text-2);
   font-size: 12px;
   text-align: left;
 }
 
+.page-frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
 .page-thumb {
-  width: 40px;
-  height: 54px;
-  flex: none;
-  border-radius: 3px;
-  border: 1px solid var(--line);
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 595 / 842;
   background: #fff;
 }
 
-.page-no { flex: 1; }
+.page-no {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+}
 
 .page-item:hover { background: var(--hover); }
 .page-item.is-current { background: var(--sel); color: var(--text); font-weight: 600; }
 .page-no { font-variant-numeric: tabular-nums; }
 
 .page-count {
+  flex: none;
   min-width: 16px;
   height: 16px;
+  margin-top: 2px;
   padding: 0 4px;
   border-radius: 8px;
   background: var(--accent);
