@@ -423,14 +423,16 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 
 .page-no {
   position: absolute;
-  right: 4px;
+  right: 3px;
   bottom: 3px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.55);
+  min-width: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.62);
   color: #fff;
-  font-size: 10.5px;
-  line-height: 15px;
+  font-size: 9.5px;
+  line-height: 13px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -440,13 +442,13 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 
 .page-count {
   position: absolute;
-  left: 4px;
+  left: 3px;
   bottom: 3px;
-  opacity: 1;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  font-size: 9px;
   background: var(--accent);
   color: var(--accent-fg);
   font-size: 10px;

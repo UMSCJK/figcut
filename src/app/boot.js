@@ -348,7 +348,7 @@ export function boot(opts = {}) {
         regions: ed.regions,
         onPick: (no) => goPage(no),
         thumbFor,
-        cols: layout.sideCols === 2 ? 2 : 1,
+        cols: effectiveCols(),
       });
     }
 
@@ -918,6 +918,8 @@ export function boot(opts = {}) {
       }
       applyLayout();
       updateColsBtn && updateColsBtn();
+      lastListSig = '';
+      render();
       saveLayout();
     });
     const end = () => {
@@ -956,13 +958,23 @@ export function boot(opts = {}) {
     });
   }
 
+  // 双列只在够宽时生效；拖窄了自动回单列（偏好还留着，拖宽会恢复）
+  function effectiveCols() {
+    const w = shell.panelLeft.getBoundingClientRect().width;
+    return layout.sideCols === 2 && w >= 340 ? 2 : 1;
+  }
+
   function updateColsBtn() {
     if (!colsBtn) return;
     const w = shell.panelLeft.getBoundingClientRect().width;
     const can = w >= 340;
     colsBtn.disabled = !can;
-    colsBtn.classList.toggle('is-active', layout.sideCols === 2);
-    colsBtn.title = can ? '单列 / 双列缩略图' : '左栏拖到 340px 以上才能双列';
+    colsBtn.classList.toggle('is-active', effectiveCols() === 2);
+    colsBtn.title = can
+      ? effectiveCols() === 2
+        ? '切回单列'
+        : '切到双列'
+      : '左栏拖到 340px 以上才能双列';
   }
 
   const leftToggle = document.getElementById('toggle-left');

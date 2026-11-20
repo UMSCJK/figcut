@@ -494,14 +494,16 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 
 .page-no {
   position: absolute;
-  right: 4px;
+  right: 3px;
   bottom: 3px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.55);
+  min-width: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.62);
   color: #fff;
-  font-size: 10.5px;
-  line-height: 15px;
+  font-size: 9.5px;
+  line-height: 13px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -511,13 +513,13 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 
 .page-count {
   position: absolute;
-  left: 4px;
+  left: 3px;
   bottom: 3px;
-  opacity: 1;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  font-size: 9px;
   background: var(--accent);
   color: var(--accent-fg);
   font-size: 10px;
@@ -4294,7 +4296,7 @@ function boot(opts = {}) {
         regions: ed.regions,
         onPick: (no) => goPage(no),
         thumbFor,
-        cols: layout.sideCols === 2 ? 2 : 1,
+        cols: effectiveCols(),
       });
     }
 
@@ -4864,6 +4866,8 @@ function boot(opts = {}) {
       }
       applyLayout();
       updateColsBtn && updateColsBtn();
+      lastListSig = '';
+      render();
       saveLayout();
     });
     const end = () => {
@@ -4902,13 +4906,23 @@ function boot(opts = {}) {
     });
   }
 
+  // 双列只在够宽时生效；拖窄了自动回单列（偏好还留着，拖宽会恢复）
+  function effectiveCols() {
+    const w = shell.panelLeft.getBoundingClientRect().width;
+    return layout.sideCols === 2 && w >= 340 ? 2 : 1;
+  }
+
   function updateColsBtn() {
     if (!colsBtn) return;
     const w = shell.panelLeft.getBoundingClientRect().width;
     const can = w >= 340;
     colsBtn.disabled = !can;
-    colsBtn.classList.toggle('is-active', layout.sideCols === 2);
-    colsBtn.title = can ? '单列 / 双列缩略图' : '左栏拖到 340px 以上才能双列';
+    colsBtn.classList.toggle('is-active', effectiveCols() === 2);
+    colsBtn.title = can
+      ? effectiveCols() === 2
+        ? '切回单列'
+        : '切到双列'
+      : '左栏拖到 340px 以上才能双列';
   }
 
   const leftToggle = document.getElementById('toggle-left');
