@@ -365,6 +365,7 @@ button { cursor: pointer; }
   position: absolute;
   left: 4px;
   bottom: 3px;
+  opacity: 1;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -376,13 +377,7 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.12s;
 }
-
-.page-item:hover .page-count,
-.page-item:focus-visible .page-count,
-.page-item.is-current .page-count { opacity: 1; }
 
 .page-count:empty { display: none; }
 
@@ -415,13 +410,24 @@ button { cursor: pointer; }
 
 .region-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
+  gap: 6px;
+  padding: 5px 6px;
   border-radius: 7px;
   cursor: pointer;
 }
+
+.region-thumb {
+  width: 64px;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #fff;
+  display: block;
+}
+
+.region-thumb.is-empty { height: 44px; background: var(--hover); border-style: dashed; }
 
 .region-row:hover { background: var(--hover); }
 .region-row.is-selected { background: var(--sel); }

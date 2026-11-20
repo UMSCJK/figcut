@@ -436,6 +436,7 @@ button { cursor: pointer; }
   position: absolute;
   left: 4px;
   bottom: 3px;
+  opacity: 1;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -447,13 +448,7 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.12s;
 }
-
-.page-item:hover .page-count,
-.page-item:focus-visible .page-count,
-.page-item.is-current .page-count { opacity: 1; }
 
 .page-count:empty { display: none; }
 
@@ -486,13 +481,24 @@ button { cursor: pointer; }
 
 .region-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
+  gap: 6px;
+  padding: 5px 6px;
   border-radius: 7px;
   cursor: pointer;
 }
+
+.region-thumb {
+  width: 64px;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #fff;
+  display: block;
+}
+
+.region-thumb.is-empty { height: 44px; background: var(--hover); border-style: dashed; }
 
 .region-row:hover { background: var(--hover); }
 .region-row.is-selected { background: var(--sel); }
@@ -1832,6 +1838,19 @@ function renderPreview(preview, opts) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
     if (source) {
+      ctx.save();
+      if (opts.poly && opts.poly.length >= 3) {
+        // 多边形蒙版：选区外的像素留白，预览和导出一致
+        ctx.beginPath();
+        opts.poly.forEach((p, i) => {
+          const x = ((p.x - crop.x) / crop.w) * w;
+          const y = ((p.y - crop.y) / crop.h) * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.clip();
+      }
       ctx.drawImage(
         source,
         (crop.x / pageW) * source.width,
@@ -1843,6 +1862,7 @@ function renderPreview(preview, opts) {
         w,
         h
       );
+      ctx.restore();
     }
     return { mode: 'crop', w, h };
   }
@@ -1990,7 +2010,7 @@ function labelOf(region) {
 
 function renderRegions(host, opts) {
   const doc = host.ownerDocument;
-  const { regions, page, selectedId, onSelect, onChange, onDelete } = opts;
+  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb } = opts;
   host.textContent = '';
 
   const groups = groupRowsByPage(regions);
@@ -2017,6 +2037,16 @@ function renderRegions(host, opts) {
         if (ev.target && ev.target.tagName === 'SELECT') return;
         onSelect(r);
       });
+
+      const thumb = onThumb ? onThumb(r) : null;
+      if (thumb) {
+        thumb.className = 'region-thumb';
+        row.appendChild(thumb);
+      } else {
+        const ph = doc.createElement('div');
+        ph.className = 'region-thumb is-empty';
+        row.appendChild(ph);
+      }
 
       if (pageNo === page) {
         row.appendChild(buildControls(doc, r, (region, meta) => onChange(region, meta)));
@@ -3136,8 +3166,9 @@ async function exportZip(input) {
       }
       const crop = cropRect(box, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
-      // 不做多边形蒙版：蒙版会切断跨边的墨迹，导出必须是完整矩形图
-      const bytes = renderPngPx(hires, crop.px);
+      // 多边形选区按多边形做蒙版：选区外的像素涂白，才真正"避开"了框外的文字
+      const poly = item.region.shape === 'poly' ? item.region.points : null;
+      const bytes = renderPngPx(hires, crop.px, poly ? { poly, scale } : {});
       addFile(zip, item.name, bytes);
       manifest.push({
         name: item.name,
@@ -3669,6 +3700,47 @@ function boot(opts = {}) {
     render();
   }
 
+  // 右栏每个 figure 的缩略图：从 3px/pt 高清页位图裁好，多边形选区会按蒙版涂白
+  function regionThumb(region) {
+    const box = region.box || region.ink;
+    if (!box) {
+      if (!maskCache.has(region.page)) {
+        pageMask(region.page).then(() => render());
+      }
+      return null;
+    }
+    const entry = maskCache.get(region.page);
+    if (!entry) {
+      pageMask(region.page).then(() => render());
+      return null;
+    }
+    const src = entry.canvas;
+    const s = 3; // 与 pageMask 的栅格一致
+    const W = 96;
+    const H = Math.max(1, Math.round((W * box.h) / box.w));
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    if (region.shape === 'poly' && region.points) {
+      ctx.beginPath();
+      region.points.forEach((p, i) => {
+        const x = ((p.x - box.x) / box.w) * W;
+        const y = ((p.y - box.y) / box.h) * H;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.clip();
+    }
+    ctx.drawImage(src, box.x * s, box.y * s, box.w * s, box.h * s, 0, 0, W, H);
+    ctx.restore();
+    return c;
+  }
+
   // 左栏缩略图：直接从已渲染的页位图缩一份
   function thumbFor(no) {
     const p = stack.pages.find((x) => x.no === no);
@@ -3703,7 +3775,15 @@ function boot(opts = {}) {
       previewHost.hidden = false;
       // 预览显示的就是导出结果：缩紧后的框再扩 margin
       const b = sel.box || sel.ink || boundsOf(sel);
-      renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
+      renderPreview(preview, {
+        source,
+        pageW,
+        pageH,
+        selectedId: sel.id,
+        regions: regionsOfPage(ed.regions, ed.page),
+        crop: b,
+        poly: sel.shape === 'poly' ? sel.points : null,
+      });
     } else {
       previewHost.hidden = true;
     }
@@ -3730,6 +3810,7 @@ function boot(opts = {}) {
         if (!meta || !meta.quiet) record(null);
         refresh();
       },
+      onThumb: regionThumb,
       onDelete: (region) => {
         const idx = ed.regions.indexOf(region);
         if (idx >= 0) ed.regions.splice(idx, 1);
@@ -3800,10 +3881,10 @@ function boot(opts = {}) {
   marginInput.title = '边距 pt（0–80）';
 
   const dpiLabel = doc.createElement('label');
-  dpiLabel.textContent = '分辨率 DPI';
+  dpiLabel.textContent = '分辨率 (DPI)';
   dpiLabel.appendChild(dpiInput);
   const marginLabel = doc.createElement('label');
-  marginLabel.textContent = '边距 pt';
+  marginLabel.textContent = '边距 (pt)';
   marginLabel.appendChild(marginInput);
   settingsBox.append(dpiLabel, marginLabel);
   document.body.appendChild(settingsBox);

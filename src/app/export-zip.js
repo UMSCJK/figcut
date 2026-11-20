@@ -75,8 +75,9 @@ export async function exportZip(input) {
       }
       const crop = cropRect(box, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
-      // 不做多边形蒙版：蒙版会切断跨边的墨迹，导出必须是完整矩形图
-      const bytes = renderPngPx(hires, crop.px);
+      // 多边形选区按多边形做蒙版：选区外的像素涂白，才真正"避开"了框外的文字
+      const poly = item.region.shape === 'poly' ? item.region.points : null;
+      const bytes = renderPngPx(hires, crop.px, poly ? { poly, scale } : {});
       addFile(zip, item.name, bytes);
       manifest.push({
         name: item.name,

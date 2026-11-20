@@ -22,7 +22,7 @@ export function labelOf(region) {
 
 export function renderRegions(host, opts) {
   const doc = host.ownerDocument;
-  const { regions, page, selectedId, onSelect, onChange, onDelete } = opts;
+  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb } = opts;
   host.textContent = '';
 
   const groups = groupRowsByPage(regions);
@@ -49,6 +49,16 @@ export function renderRegions(host, opts) {
         if (ev.target && ev.target.tagName === 'SELECT') return;
         onSelect(r);
       });
+
+      const thumb = onThumb ? onThumb(r) : null;
+      if (thumb) {
+        thumb.className = 'region-thumb';
+        row.appendChild(thumb);
+      } else {
+        const ph = doc.createElement('div');
+        ph.className = 'region-thumb is-empty';
+        row.appendChild(ph);
+      }
 
       if (pageNo === page) {
         row.appendChild(buildControls(doc, r, (region, meta) => onChange(region, meta)));

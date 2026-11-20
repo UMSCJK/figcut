@@ -241,6 +241,47 @@ export function boot(opts = {}) {
     render();
   }
 
+  // 右栏每个 figure 的缩略图：从 3px/pt 高清页位图裁好，多边形选区会按蒙版涂白
+  function regionThumb(region) {
+    const box = region.box || region.ink;
+    if (!box) {
+      if (!maskCache.has(region.page)) {
+        pageMask(region.page).then(() => render());
+      }
+      return null;
+    }
+    const entry = maskCache.get(region.page);
+    if (!entry) {
+      pageMask(region.page).then(() => render());
+      return null;
+    }
+    const src = entry.canvas;
+    const s = 3; // 与 pageMask 的栅格一致
+    const W = 96;
+    const H = Math.max(1, Math.round((W * box.h) / box.w));
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    if (region.shape === 'poly' && region.points) {
+      ctx.beginPath();
+      region.points.forEach((p, i) => {
+        const x = ((p.x - box.x) / box.w) * W;
+        const y = ((p.y - box.y) / box.h) * H;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.clip();
+    }
+    ctx.drawImage(src, box.x * s, box.y * s, box.w * s, box.h * s, 0, 0, W, H);
+    ctx.restore();
+    return c;
+  }
+
   // 左栏缩略图：直接从已渲染的页位图缩一份
   function thumbFor(no) {
     const p = stack.pages.find((x) => x.no === no);
@@ -275,7 +316,15 @@ export function boot(opts = {}) {
       previewHost.hidden = false;
       // 预览显示的就是导出结果：缩紧后的框再扩 margin
       const b = sel.box || sel.ink || boundsOf(sel);
-      renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
+      renderPreview(preview, {
+        source,
+        pageW,
+        pageH,
+        selectedId: sel.id,
+        regions: regionsOfPage(ed.regions, ed.page),
+        crop: b,
+        poly: sel.shape === 'poly' ? sel.points : null,
+      });
     } else {
       previewHost.hidden = true;
     }
@@ -302,6 +351,7 @@ export function boot(opts = {}) {
         if (!meta || !meta.quiet) record(null);
         refresh();
       },
+      onThumb: regionThumb,
       onDelete: (region) => {
         const idx = ed.regions.indexOf(region);
         if (idx >= 0) ed.regions.splice(idx, 1);
@@ -372,10 +422,10 @@ export function boot(opts = {}) {
   marginInput.title = '边距 pt（0–80）';
 
   const dpiLabel = doc.createElement('label');
-  dpiLabel.textContent = '分辨率 DPI';
+  dpiLabel.textContent = '分辨率 (DPI)';
   dpiLabel.appendChild(dpiInput);
   const marginLabel = doc.createElement('label');
-  marginLabel.textContent = '边距 pt';
+  marginLabel.textContent = '边距 (pt)';
   marginLabel.appendChild(marginInput);
   settingsBox.append(dpiLabel, marginLabel);
   document.body.appendChild(settingsBox);

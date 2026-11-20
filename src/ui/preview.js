@@ -35,6 +35,19 @@ export function renderPreview(preview, opts) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
     if (source) {
+      ctx.save();
+      if (opts.poly && opts.poly.length >= 3) {
+        // 多边形蒙版：选区外的像素留白，预览和导出一致
+        ctx.beginPath();
+        opts.poly.forEach((p, i) => {
+          const x = ((p.x - crop.x) / crop.w) * w;
+          const y = ((p.y - crop.y) / crop.h) * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.clip();
+      }
       ctx.drawImage(
         source,
         (crop.x / pageW) * source.width,
@@ -46,6 +59,7 @@ export function renderPreview(preview, opts) {
         w,
         h
       );
+      ctx.restore();
     }
     return { mode: 'crop', w, h };
   }
