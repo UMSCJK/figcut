@@ -45,6 +45,30 @@ export function cropRgba(image, boxPx, marginPx = 0) {
   return { width: w, height: h, data: out };
 }
 
+// 按导出像素矩形精确裁切（白界框 + 边距已经算好，四边保证纯白）。
+export function renderPngPx(image, pxRect) {
+  const [x0, y0, x1, y1] = pxRect;
+  const w = Math.max(1, x1 - x0);
+  const h = Math.max(1, y1 - y0);
+  const out = new Uint8ClampedArray(w * h * 4);
+  out.fill(255);
+  for (let y = 0; y < h; y += 1) {
+    const sy = y0 + y;
+    if (sy < 0 || sy >= image.height) continue;
+    for (let x = 0; x < w; x += 1) {
+      const sx = x0 + x;
+      if (sx < 0 || sx >= image.width) continue;
+      const s = (sy * image.width + sx) * 4;
+      const d = (y * w + x) * 4;
+      out[d] = image.data[s];
+      out[d + 1] = image.data[s + 1];
+      out[d + 2] = image.data[s + 2];
+      out[d + 3] = 255;
+    }
+  }
+  return encodePng({ width: w, height: h, data: out });
+}
+
 // 不重采样：页面位图必须恰好是 dpi/72 px/pt 渲出来的，否则直接报错。
 export function renderPng(image, boxPt, opts = {}) {
   const dpi = opts.dpi === undefined ? 300 : opts.dpi;

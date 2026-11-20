@@ -5,7 +5,8 @@ import { renderPage } from '../pdf/bitmap.js';
 import { buildInkMask } from '../pdf/ink.js';
 import { readTextLayer, textBoxesOnPage } from '../pdf/textlayer.js';
 import { computeExportBox } from '../core/whitemargin.js';
-import { renderPng } from '../io/export.js';
+import { renderPngPx } from '../io/export.js';
+import { growToWhite, cropRect } from '../core/whitemargin.js';
 import { createZip, addFile, toBytes } from '../io/zip.js';
 import { regionFileName, zipName, pad } from '../core/naming.js';
 import { boundsOf } from '../view/editor.js';
@@ -62,11 +63,17 @@ export async function exportZip(input) {
     const words = await readTextLayer(page);
 
     const hires = await imageOf(page, scale);
+    // 导出分辨率的掩膜：边距只能往这张图的白色里长
+    const hiMask = buildInkMask(hires, { pxPerPt: scale });
+    const pageSize = page.getViewport({ scale: 1 });
 
     for (const item of plan.filter((p) => p.page === pageNo)) {
       const textRects = textBoxesOnPage(words, item.box);
-      const exportBox = computeExportBox(mask, item.box, { textRects, maxShift: 12 });
-      const bytes = renderPng(hires, exportBox, { dpi, margin, scale });
+      const inkBox = computeExportBox(mask, item.box, { textRects });
+      const grown = growToWhite(hiMask, inkBox, margin, pageSize.width, pageSize.height);
+      const crop = cropRect(grown, pageSize.width, pageSize.height, scale);
+      const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
+      const bytes = renderPngPx(hires, crop.px);
       addFile(zip, item.name, bytes);
       manifest.push({
         name: item.name,
