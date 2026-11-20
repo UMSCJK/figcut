@@ -655,6 +655,17 @@ export function boot(opts = {}) {
       ed.pageW = stack.pages.length > 0 ? overlays.get(1).size.w : 595;
       ed.pageH = stack.pages.length > 0 ? overlays.get(1).size.h : 842;
 
+      // 换文件：所有按文档缓存的东西必须清掉，否则新文件会显示上一份的掩膜/预览
+      maskCache.clear();
+      ed.regions = [];
+      ed.selectedId = null;
+      ed.nextId = 1;
+      ed.draft = null;
+      ed.page = 1;
+      hist.past.length = 0;
+      hist.future.length = 0;
+      hist.present = snapshot();
+
       // 恢复这份 PDF 之前的标注
       currentKey = keyForFile(file.name, file.size);
       const saved = storage ? loadConfig(storage, currentKey) : null;
@@ -662,9 +673,6 @@ export function boot(opts = {}) {
         const back = flattenPages(saved.pages);
         ed.regions = back.regions;
         ed.nextId = back.nextId;
-        ed.selectedId = null;
-        hist.past.length = 0;
-        hist.future.length = 0;
         hist.present = snapshot();
       }
 
