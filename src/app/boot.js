@@ -348,6 +348,8 @@ export function boot(opts = {}) {
         regions: regionsOfPage(ed.regions, ed.page),
         crop: b,
         poly: sel.shape === 'poly' ? sel.points : null,
+        // 预览宽度永远跟着右栏走，别再写死 232 把栏撑出去
+        maxW: Math.max(80, Math.floor(previewHost.clientWidth - 14)),
       });
     } else {
       previewHost.hidden = true;
