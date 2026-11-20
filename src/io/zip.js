@@ -2,6 +2,7 @@
 // 状态：已实现。只用 store（不压缩），因此 node 里能跑、能真解开。
 
 import { crc32 } from '../core/checksum.js';
+import { concatBytes, le16, le32 } from '../core/bytes.js';
 
 // 固定时间戳（1980-01-01 00:00），保证同样输入产出同样字节。
 const DOS_TIME = 0;
@@ -17,14 +18,6 @@ export function addFile(zip, name, bytes) {
   return zip;
 }
 
-function u16(v) {
-  return [v & 0xff, (v >>> 8) & 0xff];
-}
-
-function u32(v) {
-  return [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
-}
-
 export function toBytes(zip) {
   const locals = [];
   const centrals = [];
@@ -33,57 +26,57 @@ export function toBytes(zip) {
   for (const entry of zip.entries) {
     const name = new TextEncoder().encode(entry.name);
     const local = [
-      ...u32(0x04034b50),
-      ...u16(20),
-      ...u16(0),
-      ...u16(0),
-      ...u16(DOS_TIME),
-      ...u16(DOS_DATE),
-      ...u32(entry.crc),
-      ...u32(entry.data.length),
-      ...u32(entry.data.length),
-      ...u16(name.length),
-      ...u16(0),
+      ...le32(0x04034b50),
+      ...le16(20),
+      ...le16(0),
+      ...le16(0),
+      ...le16(DOS_TIME),
+      ...le16(DOS_DATE),
+      ...le32(entry.crc),
+      ...le32(entry.data.length),
+      ...le32(entry.data.length),
+      ...le16(name.length),
+      ...le16(0),
     ];
     locals.push(new Uint8Array(local), name, entry.data);
 
     const central = [
-      ...u32(0x02014b50),
-      ...u16(20),
-      ...u16(20),
-      ...u16(0),
-      ...u16(0),
-      ...u16(DOS_TIME),
-      ...u16(DOS_DATE),
-      ...u32(entry.crc),
-      ...u32(entry.data.length),
-      ...u32(entry.data.length),
-      ...u16(name.length),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u32(0),
-      ...u32(offset),
+      ...le32(0x02014b50),
+      ...le16(20),
+      ...le16(20),
+      ...le16(0),
+      ...le16(0),
+      ...le16(DOS_TIME),
+      ...le16(DOS_DATE),
+      ...le32(entry.crc),
+      ...le32(entry.data.length),
+      ...le32(entry.data.length),
+      ...le16(name.length),
+      ...le16(0),
+      ...le16(0),
+      ...le16(0),
+      ...le16(0),
+      ...le32(0),
+      ...le32(offset),
     ];
     centrals.push(new Uint8Array(central), name);
 
     offset += local.length + name.length + entry.data.length;
   }
 
-  const centralBytes = concat(centrals);
+  const centralBytes = concatBytes(centrals);
   const end = new Uint8Array([
-    ...u32(0x06054b50),
-    ...u16(0),
-    ...u16(0),
-    ...u16(zip.entries.length),
-    ...u16(zip.entries.length),
-    ...u32(centralBytes.length),
-    ...u32(offset),
-    ...u16(0),
+    ...le32(0x06054b50),
+    ...le16(0),
+    ...le16(0),
+    ...le16(zip.entries.length),
+    ...le16(zip.entries.length),
+    ...le32(centralBytes.length),
+    ...le32(offset),
+    ...le16(0),
   ]);
 
-  return concat([...locals, centralBytes, end]);
+  return concatBytes([...locals, centralBytes, end]);
 }
 
 export function toBlob(zip) {
@@ -94,14 +87,4 @@ export function toBlob(zip) {
   return bytes;
 }
 
-function concat(parts) {
-  let total = 0;
-  for (const p of parts) total += p.length;
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const p of parts) {
-    out.set(p, at);
-    at += p.length;
-  }
-  return out;
-}
+

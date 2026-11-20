@@ -20,6 +20,7 @@ import {
 } from '../view/editor.js';
 import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
+import { exportZip } from '../app/export-zip.js';
 import { toast } from '../ui/toast.js';
 
 const TOOL_ICONS = { select: '↖', rect: '▭', poly: '⬠' };
@@ -35,6 +36,48 @@ export function boot(opts = {}) {
   const overlays = new Map();
   let state = 'idle';
   let drawing = false;
+  let currentDoc = null;
+  let currentName = 'figures';
+
+  function download(bytes, filename) {
+    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 5000);
+    return true;
+  }
+
+  async function doExport() {
+    if (!currentDoc) {
+      toast('先打开一份 PDF');
+      return null;
+    }
+    if (ed.regions.length === 0) {
+      toast('还没有框，先圈几张图');
+      return null;
+    }
+    state = 'exporting';
+    try {
+      const out = await exportZip({ doc: currentDoc, regions: ed.regions, source: currentName });
+      download(out.bytes, out.name);
+      toast('已导出 ' + out.files.length + ' 张图 → ' + out.name, { kind: 'info', ms: 5000 });
+      return out;
+    } catch (e) {
+      toast('导出失败：' + (e && e.message ? e.message : e));
+      return null;
+    } finally {
+      state = 'ready';
+    }
+  }
 
   const snapshot = () => JSON.stringify(ed.regions);
   const record = (key) => commit(hist, snapshot(), key ? { key } : {});
@@ -71,6 +114,7 @@ export function boot(opts = {}) {
 
   addButton(shell, 'left', '↶', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销' });
   addButton(shell, 'left', '↷', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做' });
+  addButton(shell, 'right', '导出', () => doExport(), { title: '导出 ZIP (Ctrl+E)', ariaLabel: '导出' });
 
   // 浮动工具组：画布左上
   const doc = shell.canvas.ownerDocument;
@@ -165,6 +209,11 @@ export function boot(opts = {}) {
       }
       return;
     }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') {
+      ev.preventDefault();
+      doExport();
+      return;
+    }
     if (ev.key === 'v' || ev.key === 'V') setTool(ed, 'select');
     if (ev.key === 'r' || ev.key === 'R') setTool(ed, 'rect');
     if (ev.key === 'g' || ev.key === 'G') setTool(ed, 'poly');
@@ -201,6 +250,8 @@ export function boot(opts = {}) {
     setTitle(shell, file.name);
     try {
       const doc = await openFile(file, opts);
+      currentDoc = doc;
+      currentName = file.name;
       const n = await stack.mount(doc);
 
       overlays.clear();
@@ -233,7 +284,7 @@ export function boot(opts = {}) {
       .catch((e) => toast('打不开 ' + opts.url + '：' + e.message));
   }
 
-  return { shell, zoom, stack, editor: ed, history: hist, load, render, status: () => state };
+  return { shell, zoom, stack, editor: ed, history: hist, load, render, exportZip: doExport, status: () => state };
 }
 
 // 骨架里声明的名字：读装配后的状态

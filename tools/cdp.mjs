@@ -91,6 +91,13 @@ export async function launch(opts = {}) {
 
   await send('Page.enable');
   await send('Runtime.enable');
+  // 关缓存：不然改了源码，页面还是旧的
+  try {
+    await send('Network.enable');
+    await send('Network.setCacheDisabled', { cacheDisabled: true });
+  } catch (e) {
+    // 老 Chrome 无所谓
+  }
 
   return {
     port,

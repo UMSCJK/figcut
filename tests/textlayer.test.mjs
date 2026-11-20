@@ -20,8 +20,9 @@ test('textlayer: 只留与框相交的词', () => {
   assert(textBoxesOnPage(words, { x: 0, y: 0, w: 50, h: 50 }).length === 0);
 });
 
-test('textlayer: pdf.js 文本层坐标换算', async () => {
+test('textlayer: pdf.js 文本层要从左下原点翻到左上原点', async () => {
   const page = {
+    getViewport: () => ({ width: 595, height: 842 }),
     getTextContent: async () => ({
       items: [
         { str: 'A', transform: [1, 0, 0, 1, 40, 300], width: 8, height: 10 },
@@ -31,5 +32,7 @@ test('textlayer: pdf.js 文本层坐标换算', async () => {
   };
   const words = await readTextLayer(page);
   assert(words.length === 1, '空白要过滤掉');
-  assert(words[0].x === 40 && words[0].y === 290 && words[0].h === 10);
+  assert(words[0].x === 40, 'x 不变');
+  assert(words[0].y === 842 - 310, 'y 必须翻转：实际 ' + words[0].y);
+  assert(words[0].h === 10);
 });

@@ -348,13 +348,16 @@ export function inkBounds(mask, rect, opts = {}) {
 }
 
 // 文字不算笔画：把文字区域从掩膜里挖掉（在副本上做，不动调用方的掩膜）。
+// 字形墨迹常常超出 pdf.js 报的框（降部、重音），所以要往外留：竖向 3pt、横向 1pt。
 function maskWithoutText(mask, textRects) {
   const data = Uint8Array.from(mask.data);
+  const padY = Math.round(3 * mask.pxPerPt);
+  const padX = Math.max(1, Math.round(1 * mask.pxPerPt));
   for (const t of textRects) {
-    const x0 = Math.max(0, Math.floor(t.x) - 1);
-    const y0 = Math.max(0, Math.floor(t.y) - 1);
-    const x1 = Math.min(mask.w, Math.ceil(t.x + t.w) + 1);
-    const y1 = Math.min(mask.h, Math.ceil(t.y + t.h) + 1);
+    const x0 = Math.max(0, Math.floor(t.x) - padX);
+    const y0 = Math.max(0, Math.floor(t.y) - padY);
+    const x1 = Math.min(mask.w, Math.ceil(t.x + t.w) + padX);
+    const y1 = Math.min(mask.h, Math.ceil(t.y + t.h) + padY);
     for (let y = y0; y < y1; y += 1) {
       for (let x = x0; x < x1; x += 1) data[y * mask.w + x] = 0;
     }

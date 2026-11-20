@@ -26,14 +26,17 @@ export function textBoxesOnPage(words, rect) {
   );
 }
 
-// 浏览器侧：pdf.js 的文本层（页面坐标系，与 pt 一致）。
+// 浏览器侧：pdf.js 给的是页面用户空间（左下原点、y 向上），
+// 我们的掩膜是左上原点、y 向下，这里必须翻一次，否则文字框整个上下颠倒。
 export async function readTextLayer(page) {
+  const viewport = page.getViewport({ scale: 1 });
+  const pageH = viewport.height;
   const content = await page.getTextContent();
   return content.items
     .filter((it) => it.str && it.str.trim())
     .map((it) => ({
       x: it.transform[4],
-      y: it.transform[5] - it.height,
+      y: pageH - (it.transform[5] + it.height),
       w: it.width,
       h: it.height,
       text: it.str,
