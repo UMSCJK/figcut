@@ -2,6 +2,7 @@
 // 状态：已实现。
 
 import { buildControls, kindValue } from './inspector.js';
+import { ICONS } from './icons.js';
 
 // 按页分组给列表用；真正的分组逻辑在 io/config（存盘也要用同一份）
 export function groupRowsByPage(regions) {
@@ -61,7 +62,7 @@ export function renderRegions(host, opts) {
       const del = doc.createElement('button');
       del.type = 'button';
       del.className = 'region-del';
-      del.textContent = '×';
+      del.innerHTML = ICONS.trash;
       del.title = '删除';
       del.addEventListener('click', (ev) => {
         ev.stopPropagation();

@@ -1,25 +1,59 @@
+/* figcut 设计令牌：Adwaita 风格浅/深两套 + 排版与控件尺寸。 */
 :root {
-  --topbar-h: 46px;
-  --panel-left-w: 176px;
-  --panel-right-w: 240px;
-  --radius: 6px;
-  --gap: 8px;
-
-  --bg: #f7f7f8;
-  --bg-alt: #ffffff;
-  --fg: #1d1d20;
-  --fg-dim: #6c6c74;
-  --line: #dcdce0;
-  --accent: #1c6ef2;
-  --danger: #d93a3a;
+  color-scheme: light;
+  --accent: #3584e4;
+  --accent-hover: #4a90e8;
+  --accent-fg: #ffffff;
+  --opt: #e5a50a;
+  --destructive: #e01b24;
+  --window: #fafafa;
+  --header: #ebebeb;
+  --sidebar: #f2f2f2;
+  --view: #f6f5f4;
+  --card: #ffffff;
+  --page: #ffffff;
+  --page-dark: #1b1b1b;
+  --line: rgba(0, 0, 0, 0.1);
+  --line-strong: rgba(0, 0, 0, 0.18);
+  --hover: rgba(0, 0, 0, 0.06);
+  --active: rgba(0, 0, 0, 0.12);
+  --sel: rgba(53, 132, 228, 0.16);
+  --ink-box: rgba(224, 27, 36, 0.55);
+  --text: rgba(0, 0, 0, 0.88);
+  --text-2: rgba(0, 0, 0, 0.56);
+  --text-3: rgba(0, 0, 0, 0.38);
+  --h-header: 46px;
+  --w-side: 176px;
+  --w-panel: 250px;
+  --r-ctl: 6px;
+  --ctl-h: 28px;
+  --font: "Adwaita Sans", Cantarell, system-ui, -apple-system, "Noto Sans CJK SC", sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "Source Code Pro", monospace;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 3px 9px rgba(0, 0, 0, 0.14);
 }
 
 :root[data-ui="dark"] {
-  --bg: #1e1f22;
-  --bg-alt: #26272b;
-  --fg: #ececf0;
-  --fg-dim: #9a9aa4;
-  --line: #3a3b40;
-  --accent: #4d9bff;
-  --danger: #ff6b6b;
+  color-scheme: dark;
+  --accent: #3584e4;
+  --accent-hover: #4a90e8;
+  --destructive: #ff7b72;
+  --window: #242424;
+  --header: #303030;
+  --sidebar: #2b2b2b;
+  --view: #1e1e1e;
+  --card: #363636;
+  --page: #ffffff;
+  --page-dark: #141414;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --hover: rgba(255, 255, 255, 0.08);
+  --active: rgba(255, 255, 255, 0.14);
+  --sel: rgba(53, 132, 228, 0.32);
+  --ink-box: rgba(255, 123, 114, 0.6);
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.72);
+  --text-3: rgba(255, 255, 255, 0.45);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 3px 9px rgba(0, 0, 0, 0.45);
 }

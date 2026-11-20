@@ -44,8 +44,10 @@ export function addButtonTo(container, label, onClick, opts = {}) {
   if (!doc) throw figcutError('no-dom', '没有 DOM 就加不了按钮');
   const btn = doc.createElement('button');
   btn.type = 'button';
-  btn.className = 'tool';
-  btn.textContent = label;
+  btn.className = opts.kind === 'btn' ? 'btn' : 'icon-btn';
+  if (opts.suggested) btn.classList.add('suggested');
+  if (opts.icon) btn.innerHTML = opts.icon;
+  else btn.textContent = label;
   if (opts.title) btn.title = opts.title;
   if (opts.ariaLabel) btn.setAttribute('aria-label', opts.ariaLabel);
   btn.addEventListener('click', onClick);

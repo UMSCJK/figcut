@@ -6,6 +6,7 @@ import { createZoom, subscribe, setScale, setFit, anchorAt } from '../view/zoom.
 import { stepZoom } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
+import { ICONS } from '../ui/icons.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
 import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
@@ -33,7 +34,7 @@ import { createTheme, cycleUi, cyclePdfPreview, applyTheme, loadTheme, saveTheme
 import { loadSettings, saveSettings, setDpi, setMargin } from '../app/settings.js';
 import { toast } from '../ui/toast.js';
 
-const TOOL_ICONS = { select: '↖', rect: '▭', poly: '⬠' };
+
 
 export function boot(opts = {}) {
   const shell = createShell();
@@ -243,7 +244,7 @@ export function boot(opts = {}) {
   addButton(shell, 'left', '打开', async () => {
     const file = await pickFile();
     if (file) load(file);
-  }, { title: '打开 PDF（Ctrl+O）' });
+  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.open });
 
   const undoUi = () => {
     const prev = undo(hist);
@@ -260,8 +261,8 @@ export function boot(opts = {}) {
     render();
   };
 
-  addButton(shell, 'left', '↶', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销' });
-  addButton(shell, 'left', '↷', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做' });
+  addButton(shell, 'left', '撤销', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销', icon: ICONS.undo });
+  addButton(shell, 'left', '重做', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做', icon: ICONS.redo });
   // 导出设置：边距 / DPI
   const settingsBox = doc.createElement('div');
   settingsBox.className = 'settings-popover';
@@ -300,21 +301,27 @@ export function boot(opts = {}) {
     saveSettings(storage, settings);
   });
 
-  addButton(shell, 'right', '⚙', () => {
+  addButton(shell, 'right', '设置', () => {
     settingsBox.hidden = !settingsBox.hidden;
-  }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置' });
+  }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
 
-  addButton(shell, 'right', '◐', () => {
+  addButton(shell, 'right', '配色', () => {
     cycleUi(theme);
     applyColors();
-  }, { title: '界面配色：跟随系统 → 浅色 → 深色', ariaLabel: '界面配色' });
+  }, { title: '界面配色：跟随系统 → 浅色 → 深色', ariaLabel: '界面配色', icon: ICONS.uiTheme });
 
-  addButton(shell, 'right', '◑', () => {
+  addButton(shell, 'right', '反相', () => {
     cyclePdfPreview(theme);
     applyColors();
-  }, { title: 'PDF 预览：跟随界面 → 正常 → 反相 (Ctrl+I)', ariaLabel: 'PDF 配色' });
+  }, { title: 'PDF 预览：跟随界面 → 正常 → 反相 (Ctrl+I)', ariaLabel: 'PDF 配色', icon: ICONS.invert });
 
-  addButton(shell, 'right', '导出', () => doExport(), { title: '导出 ZIP (Ctrl+E)', ariaLabel: '导出' });
+  addButton(shell, 'right', '导出', () => doExport(), {
+    title: '导出 ZIP (Ctrl+E)',
+    ariaLabel: '导出',
+    kind: 'btn',
+    suggested: true,
+    icon: ICONS.export,
+  });
 
   // 浮动工具组：画布左上
   const toolGroup = doc.createElement('div');
@@ -327,19 +334,19 @@ export function boot(opts = {}) {
     for (const [name, btn] of toolButtons) btn.classList.toggle('is-active', name === tool);
   }
 
-  const toolButton = (icon, label, tool) => {
-    const btn = addButtonTo(toolGroup, icon, () => {
+  const toolButton = (iconSvg, label, tool) => {
+    const btn = addButtonTo(toolGroup, label, () => {
       setTool(ed, tool);
       markTool(tool);
-    }, { title: label, ariaLabel: label });
+    }, { title: label, ariaLabel: label, icon: iconSvg });
     toolButtons.set(tool, btn);
     if (tool === ed.tool) btn.classList.add('is-active');
     return btn;
   };
 
-  toolButton(TOOL_ICONS.select, '选择 (V)', 'select');
-  toolButton(TOOL_ICONS.rect, '矩形 (R)', 'rect');
-  toolButton(TOOL_ICONS.poly, '多边形 (G)', 'poly');
+  toolButton(ICONS.select, '选择 (V)', 'select');
+  toolButton(ICONS.rect, '矩形 (R)', 'rect');
+  toolButton(ICONS.poly, '多边形 (G)', 'poly');
 
   function pointOf(ev) {
     const el = ev.target && ev.target.closest ? ev.target.closest('.page') : null;

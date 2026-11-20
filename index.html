@@ -1,29 +1,32 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-ui="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>figcut</title>
 <link rel="stylesheet" href="styles/tokens.css">
-<link rel="stylesheet" href="styles/base.css">
-<link rel="stylesheet" href="styles/page.css">
+<link rel="stylesheet" href="styles/app.css">
 </head>
 <body>
 <div class="app">
   <header class="topbar">
     <div class="cluster cluster-left" id="topbar-left"></div>
-    <div class="title" id="topbar-title">figcut</div>
+    <div class="title-block"><div class="title" id="topbar-title">figcut</div></div>
     <div class="cluster cluster-right" id="topbar-right"></div>
   </header>
   <main class="body">
-    <aside class="panel panel-left" id="panel-left" aria-label="页面列表"></aside>
-    <div class="canvas" id="canvas"></div>
-    <aside class="panel panel-right" id="panel-right" aria-label="区域列表"></aside>
+    <aside class="sidebar" id="panel-left"><div class="side-head">页面</div></aside>
+    <div class="canvas" id="canvas">
+      <div class="empty" id="empty">
+        <div class="big">把 PDF 拖进来</div>
+        <div class="small">或点左上角「打开」</div>
+      </div>
+    </div>
+    <aside class="panel" id="panel-right"></aside>
   </main>
-  <div class="empty" id="empty">把 PDF 拖进来，或点打开</div>
   <div class="banner" id="banner" hidden></div>
 </div>
-<!-- pdf.js 保持外部引用：file:// 下 classic script 可加载，ESM / Worker / fetch 都不行 -->
+<!-- pdf.js 保持外部引用：file:// 下 classic script 可加载 -->
 <script src="vendor/pdfjs/pdf.min.js"></script>
 <script type="module" src="src/main.js"></script>
 </body>

@@ -3,6 +3,7 @@
 
 import { setScale, setFit } from '../view/zoom.js';
 import { zoomPresets } from '../core/layout.js';
+import { ICONS } from './icons.js';
 
 export function renderZoomControl(opts) {
   const { container, zoom: z } = opts;
@@ -13,8 +14,8 @@ export function renderZoomControl(opts) {
 
   const minus = doc.createElement('button');
   minus.type = 'button';
-  minus.className = 'tool';
-  minus.textContent = '−';
+  minus.className = 'icon-btn';
+  minus.innerHTML = ICONS.minus;
   minus.setAttribute('aria-label', '缩小');
 
   const input = doc.createElement('input');
@@ -25,8 +26,8 @@ export function renderZoomControl(opts) {
 
   const plus = doc.createElement('button');
   plus.type = 'button';
-  plus.className = 'tool';
-  plus.textContent = '+';
+  plus.className = 'icon-btn';
+  plus.innerHTML = ICONS.plus;
   plus.setAttribute('aria-label', '放大');
 
   const menu = doc.createElement('select');
