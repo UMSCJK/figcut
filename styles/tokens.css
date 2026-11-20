@@ -1,0 +1,25 @@
+:root {
+  --topbar-h: 46px;
+  --panel-left-w: 176px;
+  --panel-right-w: 240px;
+  --radius: 6px;
+  --gap: 8px;
+
+  --bg: #f7f7f8;
+  --bg-alt: #ffffff;
+  --fg: #1d1d20;
+  --fg-dim: #6c6c74;
+  --line: #dcdce0;
+  --accent: #1c6ef2;
+  --danger: #d93a3a;
+}
+
+:root[data-ui="dark"] {
+  --bg: #1e1f22;
+  --bg-alt: #26272b;
+  --fg: #ececf0;
+  --fg-dim: #9a9aa4;
+  --line: #3a3b40;
+  --accent: #4d9bff;
+  --danger: #ff6b6b;
+}
