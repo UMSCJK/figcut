@@ -187,9 +187,27 @@ button { cursor: pointer; }
 
 .region.is-selected { fill: rgba(53, 132, 228, 0.12); stroke-width: 1.6; }
 
-.region.is-draft {
-  fill: rgba(53, 132, 228, 0.08);
+.draft-rect {
+  fill: rgba(53, 132, 228, 0.1);
+  stroke: var(--accent);
+  stroke-width: 1.2;
   stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.draft-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.draft-dot {
+  fill: #ffffff;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
 }
 
 .cropbox {

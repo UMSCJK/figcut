@@ -93,13 +93,36 @@ export function drawRegions(overlay, regions, opts = {}) {
     rect.setAttribute('y', y);
     rect.setAttribute('width', Math.abs(draft.x1 - draft.x0));
     rect.setAttribute('height', Math.abs(draft.y1 - draft.y0));
-    rect.setAttribute('class', 'region is-draft');
+    rect.setAttribute('class', 'draft-rect');
     put(overlay.svg, rect);
-  } else if (draft && draft.shape === 'poly' && draft.points.length > 1) {
-    const line = doc.createElementNS(NS, 'polyline');
-    line.setAttribute('points', draft.points.map((p) => p.x + ',' + p.y).join(' '));
-    line.setAttribute('class', 'region is-draft');
-    put(overlay.svg, line);
+  } else if (draft && draft.shape === 'poly' && draft.points.length > 0) {
+    // 已落下的点 + 折线 + 到光标的橡皮筋
+    const pts = draft.points;
+    if (pts.length > 1) {
+      const line = doc.createElementNS(NS, 'polyline');
+      line.setAttribute('points', pts.map((p) => p.x + ',' + p.y).join(' '));
+      line.setAttribute('class', 'draft-line');
+      put(overlay.svg, line);
+    }
+    if (opts.cursor) {
+      const last = pts[pts.length - 1];
+      const band = doc.createElementNS(NS, 'line');
+      band.setAttribute('x1', last.x);
+      band.setAttribute('y1', last.y);
+      band.setAttribute('x2', opts.cursor.x);
+      band.setAttribute('y2', opts.cursor.y);
+      band.setAttribute('class', 'draft-line');
+      band.setAttribute('opacity', '0.7');
+      put(overlay.svg, band);
+    }
+    for (const p of pts) {
+      const dot = doc.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', p.x);
+      dot.setAttribute('cy', p.y);
+      dot.setAttribute('r', 8 / Math.max(0.05, opts.scale || 1));
+      dot.setAttribute('class', 'draft-dot');
+      put(overlay.svg, dot);
+    }
   }
 }
 

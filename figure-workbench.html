@@ -258,9 +258,27 @@ button { cursor: pointer; }
 
 .region.is-selected { fill: rgba(53, 132, 228, 0.12); stroke-width: 1.6; }
 
-.region.is-draft {
-  fill: rgba(53, 132, 228, 0.08);
+.draft-rect {
+  fill: rgba(53, 132, 228, 0.1);
+  stroke: var(--accent);
+  stroke-width: 1.2;
   stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.draft-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.draft-dot {
+  fill: #ffffff;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
 }
 
 .cropbox {
@@ -1735,13 +1753,36 @@ function drawRegions(overlay, regions, opts = {}) {
     rect.setAttribute('y', y);
     rect.setAttribute('width', Math.abs(draft.x1 - draft.x0));
     rect.setAttribute('height', Math.abs(draft.y1 - draft.y0));
-    rect.setAttribute('class', 'region is-draft');
+    rect.setAttribute('class', 'draft-rect');
     put(overlay.svg, rect);
-  } else if (draft && draft.shape === 'poly' && draft.points.length > 1) {
-    const line = doc.createElementNS(NS, 'polyline');
-    line.setAttribute('points', draft.points.map((p) => p.x + ',' + p.y).join(' '));
-    line.setAttribute('class', 'region is-draft');
-    put(overlay.svg, line);
+  } else if (draft && draft.shape === 'poly' && draft.points.length > 0) {
+    // 已落下的点 + 折线 + 到光标的橡皮筋
+    const pts = draft.points;
+    if (pts.length > 1) {
+      const line = doc.createElementNS(NS, 'polyline');
+      line.setAttribute('points', pts.map((p) => p.x + ',' + p.y).join(' '));
+      line.setAttribute('class', 'draft-line');
+      put(overlay.svg, line);
+    }
+    if (opts.cursor) {
+      const last = pts[pts.length - 1];
+      const band = doc.createElementNS(NS, 'line');
+      band.setAttribute('x1', last.x);
+      band.setAttribute('y1', last.y);
+      band.setAttribute('x2', opts.cursor.x);
+      band.setAttribute('y2', opts.cursor.y);
+      band.setAttribute('class', 'draft-line');
+      band.setAttribute('opacity', '0.7');
+      put(overlay.svg, band);
+    }
+    for (const p of pts) {
+      const dot = doc.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', p.x);
+      dot.setAttribute('cy', p.y);
+      dot.setAttribute('r', 8 / Math.max(0.05, opts.scale || 1));
+      dot.setAttribute('class', 'draft-dot');
+      put(overlay.svg, dot);
+    }
   }
 }
 
@@ -3399,6 +3440,7 @@ function boot(opts = {}) {
   let drawing = false;
   let currentDoc = null;
   let currentName = 'figures';
+  let lastPt = null;
 
   function download(bytes, filename) {
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
@@ -3546,14 +3588,20 @@ function boot(opts = {}) {
     return mask;
   }
 
-  async function measureRegion(region) {
+  function measureRegion(region) {
     if (!region) return;
-    const mask = await pageMask(region.page);
-    if (!mask) return;
     const shape = region.shape === 'poly' ? region.points : region.rect;
-    const box = computeExportBox(mask, shape);
-    region.ink = box || null;
-    render();
+    // 掩膜已经就绪就同步量，画完立刻能看到虚线框；否则后台补
+    const cached = maskCache.get(region.page);
+    if (cached) {
+      region.ink = computeExportBox(cached, shape) || null;
+      return;
+    }
+    pageMask(region.page).then((mask) => {
+      if (!mask) return;
+      region.ink = computeExportBox(mask, shape) || null;
+      render();
+    });
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
@@ -3631,6 +3679,7 @@ function boot(opts = {}) {
         selectedId: page === ed.page ? ed.selectedId : null,
         selected: page === ed.page ? ed.regions.find((r) => r.id === ed.selectedId) || null : null,
         draft: page === ed.page ? ed.draft : null,
+        cursor: page === ed.page ? lastPt : null,
         scale: zoom.scale,
         margin: settings.margin,
       });
@@ -3795,6 +3844,7 @@ function boot(opts = {}) {
     ed.pageW = hit.size.w;
     ed.pageH = hit.size.h;
     drawing = true;
+    lastPt = hit.pt;
     pointerDown(ed, hit.pt);
     render();
   });
@@ -3808,6 +3858,7 @@ function boot(opts = {}) {
     if (!drawing || state !== 'ready') return;
     const hit = pointOf(ev);
     if (!hit) return;
+    lastPt = hit.pt;
     pointerMove(ed, hit.pt);
     render();
   });
@@ -3854,6 +3905,7 @@ function boot(opts = {}) {
     const total = stack.pages.length || 1;
     const next = Math.min(Math.max(1, no), total);
     stack.setCurrent(next);
+    pageMask(next); // 预热，画框时能同步缩紧
     if (ed.page !== next) {
       ed.page = next;
       ed.selectedId = null;
@@ -3977,6 +4029,7 @@ function boot(opts = {}) {
       }
 
       render();
+      pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
       state = 'ready';
     } catch (e) {

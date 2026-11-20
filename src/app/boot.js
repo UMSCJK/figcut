@@ -57,6 +57,7 @@ export function boot(opts = {}) {
   let drawing = false;
   let currentDoc = null;
   let currentName = 'figures';
+  let lastPt = null;
 
   function download(bytes, filename) {
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
@@ -204,14 +205,20 @@ export function boot(opts = {}) {
     return mask;
   }
 
-  async function measureRegion(region) {
+  function measureRegion(region) {
     if (!region) return;
-    const mask = await pageMask(region.page);
-    if (!mask) return;
     const shape = region.shape === 'poly' ? region.points : region.rect;
-    const box = computeExportBox(mask, shape);
-    region.ink = box || null;
-    render();
+    // 掩膜已经就绪就同步量，画完立刻能看到虚线框；否则后台补
+    const cached = maskCache.get(region.page);
+    if (cached) {
+      region.ink = computeExportBox(cached, shape) || null;
+      return;
+    }
+    pageMask(region.page).then((mask) => {
+      if (!mask) return;
+      region.ink = computeExportBox(mask, shape) || null;
+      render();
+    });
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
@@ -289,6 +296,7 @@ export function boot(opts = {}) {
         selectedId: page === ed.page ? ed.selectedId : null,
         selected: page === ed.page ? ed.regions.find((r) => r.id === ed.selectedId) || null : null,
         draft: page === ed.page ? ed.draft : null,
+        cursor: page === ed.page ? lastPt : null,
         scale: zoom.scale,
         margin: settings.margin,
       });
@@ -453,6 +461,7 @@ export function boot(opts = {}) {
     ed.pageW = hit.size.w;
     ed.pageH = hit.size.h;
     drawing = true;
+    lastPt = hit.pt;
     pointerDown(ed, hit.pt);
     render();
   });
@@ -466,6 +475,7 @@ export function boot(opts = {}) {
     if (!drawing || state !== 'ready') return;
     const hit = pointOf(ev);
     if (!hit) return;
+    lastPt = hit.pt;
     pointerMove(ed, hit.pt);
     render();
   });
@@ -512,6 +522,7 @@ export function boot(opts = {}) {
     const total = stack.pages.length || 1;
     const next = Math.min(Math.max(1, no), total);
     stack.setCurrent(next);
+    pageMask(next); // 预热，画框时能同步缩紧
     if (ed.page !== next) {
       ed.page = next;
       ed.selectedId = null;
@@ -635,6 +646,7 @@ export function boot(opts = {}) {
       }
 
       render();
+      pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
       state = 'ready';
     } catch (e) {
