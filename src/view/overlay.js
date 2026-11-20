@@ -1,17 +1,74 @@
-// 每页选框覆盖层绘制与命中
-// 状态：骨架。接口已冻结，实现待补（view.overlay）。
+// 每页选框覆盖层：SVG 画框，editor 负责逻辑，这里只画。
+// 状态：已实现。
 
-import { notImplemented } from '../core/errors.js';
+import { boundsOf } from './editor.js';
 
-export function createOverlay(...args) {
-  throw notImplemented('view.overlay.createOverlay');
+const NS = 'http://www.w3.org/2000/svg';
+
+export function createOverlay(pageEl, size) {
+  const doc = pageEl.ownerDocument;
+  const host = pageEl.querySelector('.page-overlay');
+  const svg = doc.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'regions');
+  svg.setAttribute('viewBox', '0 0 ' + size.w + ' ' + size.h);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  host.appendChild(svg);
+  return { svg, size };
 }
 
-export function drawRegions(...args) {
-  throw notImplemented('view.overlay.drawRegions');
+function put(parent, node) {
+  parent.appendChild(node);
+  return node;
 }
 
-export function hitTest(...args) {
-  throw notImplemented('view.overlay.hitTest');
+export function drawRegions(overlay, regions, opts = {}) {
+  const doc = overlay.svg.ownerDocument;
+  while (overlay.svg.firstChild) overlay.svg.removeChild(overlay.svg.firstChild);
+
+  for (const r of regions) {
+    const cls = 'region' + (r.id === opts.selectedId ? ' is-selected' : '');
+    if (r.shape === 'poly') {
+      const poly = doc.createElementNS(NS, 'polygon');
+      poly.setAttribute('points', r.points.map((p) => p.x + ',' + p.y).join(' '));
+      poly.setAttribute('class', cls);
+      put(overlay.svg, poly);
+    } else {
+      const rect = doc.createElementNS(NS, 'rect');
+      rect.setAttribute('x', r.rect.x);
+      rect.setAttribute('y', r.rect.y);
+      rect.setAttribute('width', r.rect.w);
+      rect.setAttribute('height', r.rect.h);
+      rect.setAttribute('class', cls);
+      put(overlay.svg, rect);
+    }
+  }
+
+  const draft = opts.draft;
+  if (draft && draft.shape === 'rect') {
+    const x = Math.min(draft.x0, draft.x1);
+    const y = Math.min(draft.y0, draft.y1);
+    const rect = doc.createElementNS(NS, 'rect');
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', y);
+    rect.setAttribute('width', Math.abs(draft.x1 - draft.x0));
+    rect.setAttribute('height', Math.abs(draft.y1 - draft.y0));
+    rect.setAttribute('class', 'region is-draft');
+    put(overlay.svg, rect);
+  } else if (draft && draft.shape === 'poly' && draft.points.length > 1) {
+    const line = doc.createElementNS(NS, 'polyline');
+    line.setAttribute('points', draft.points.map((p) => p.x + ',' + p.y).join(' '));
+    line.setAttribute('class', 'region is-draft');
+    put(overlay.svg, line);
+  }
 }
 
+// 命中测试交给 editor；这里只把当前页的框挑出来画。
+export function regionsOfPage(regions, page) {
+  return regions.filter((r) => r.page === page);
+}
+
+export function hitTest(ed, pt, regionAtFn) {
+  return regionAtFn(ed, pt);
+}
+
+export { boundsOf };

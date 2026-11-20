@@ -39,8 +39,8 @@ export function setEmpty(shell, visible) {
   shell.empty.style.display = visible ? '' : 'none';
 }
 
-export function addButton(shell, side, label, onClick, opts = {}) {
-  const doc = (shell.left && shell.left.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+export function addButtonTo(container, label, onClick, opts = {}) {
+  const doc = (container && container.ownerDocument) || (typeof document !== 'undefined' ? document : null);
   if (!doc) throw figcutError('no-dom', '没有 DOM 就加不了按钮');
   const btn = doc.createElement('button');
   btn.type = 'button';
@@ -49,6 +49,10 @@ export function addButton(shell, side, label, onClick, opts = {}) {
   if (opts.title) btn.title = opts.title;
   if (opts.ariaLabel) btn.setAttribute('aria-label', opts.ariaLabel);
   btn.addEventListener('click', onClick);
-  (side === 'right' ? shell.right : shell.left).appendChild(btn);
+  container.appendChild(btn);
   return btn;
+}
+
+export function addButton(shell, side, label, onClick, opts = {}) {
+  return addButtonTo(side === 'right' ? shell.right : shell.left, label, onClick, opts);
 }

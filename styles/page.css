@@ -34,10 +34,31 @@
 
 .page.is-current .page-overlay { pointer-events: auto; }
 
+.pages {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 16px 0;
+}
+
+.tool-group {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 6;
+}
+
 .zoom-control {
-  position: sticky;
+  position: absolute;
+  right: 12px;
   bottom: 12px;
-  margin: 0 12px 12px auto;
   width: max-content;
   display: flex;
   align-items: center;
@@ -69,3 +90,15 @@
   color: var(--fg);
   font: inherit;
 }
+
+/* 标注层 */
+.regions { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.region {
+  fill: none;
+  stroke: #1c6ef2;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.region.is-selected { stroke: #ff8c00; stroke-width: 2.5; }
+.region.is-draft { stroke-dasharray: 4 3; opacity: 0.9; }
+.tool.is-active { background: color-mix(in srgb, var(--accent) 22%, transparent); }

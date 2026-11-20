@@ -43,7 +43,7 @@ html, body {
 .panel-left { width: var(--panel-left-w); border-right: 1px solid var(--line); }
 .panel-right { width: var(--panel-right-w); border-left: 1px solid var(--line); }
 
-.canvas { flex: 1; min-width: 0; position: relative; overflow: auto; }
+.canvas { flex: 1; min-width: 0; position: relative; overflow: hidden; }
 
 .empty {
   position: absolute;

@@ -1,10 +1,11 @@
 // 撤销重做栈与微移合并
-// 状态：已实现。入参是"快照条目"，具体存什么由调用方决定；本模块只管顺序与合并。
+// 状态：已实现。存的是"整份快照"，合并窗口内同 key 的动作只留一条。
 
 export const COALESCE_MS = 600;
 
-export function createHistory(opts = {}) {
+export function createHistory(initial, opts = {}) {
   return {
+    present: initial === undefined ? null : initial,
     past: [],
     future: [],
     limit: opts.limit === undefined ? 200 : opts.limit,
@@ -15,39 +16,41 @@ export function createHistory(opts = {}) {
   };
 }
 
-// key 相同且落在合并窗口内 → 覆盖上一条，而不是又压一条。
-// 连续微移 / 一次拖动因此只留一条历史。
-export function commit(h, entry, opts = {}) {
+export function current(h) {
+  return h.present;
+}
+
+// key 相同且落在合并窗口内 → 只更新 present，不再压一条历史。
+export function commit(h, next, opts = {}) {
   const key = opts.key === undefined ? null : opts.key;
   const t = h.now();
-  const merge = key !== null && key === h.lastKey && t - h.lastTime <= h.windowMs;
+  const merge = key !== null && key === h.lastKey && t - h.lastTime <= h.windowMs && h.past.length > 0;
 
-  if (merge && h.past.length > 0) {
-    h.past[h.past.length - 1] = entry;
-  } else {
-    h.past.push(entry);
+  if (!merge) {
+    h.past.push(h.present);
     if (h.past.length > h.limit) h.past.shift();
   }
+  h.present = next;
   h.lastKey = key;
   h.lastTime = t;
   h.future.length = 0;
-  return entry;
+  return next;
 }
 
 export function undo(h) {
   if (h.past.length === 0) return null;
-  const entry = h.past.pop();
-  h.future.push(entry);
+  h.future.push(h.present);
+  h.present = h.past.pop();
   h.lastKey = null;
-  return entry;
+  return h.present;
 }
 
 export function redo(h) {
   if (h.future.length === 0) return null;
-  const entry = h.future.pop();
-  h.past.push(entry);
+  h.past.push(h.present);
+  h.present = h.future.pop();
   h.lastKey = null;
-  return entry;
+  return h.present;
 }
 
 export function canUndo(h) {

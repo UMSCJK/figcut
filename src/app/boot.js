@@ -1,12 +1,28 @@
 // 启动装配与状态机
-// 状态：已实现（最小可用：打开 PDF、连续滚动、缩放）。
+// 状态：已实现（打开 PDF、连续滚动、缩放、矩形/多边形标注、撤销重做）。
 
-import { createShell, setTitle, setEmpty, addButton } from '../ui/shell.js';
+import { createShell, setTitle, setEmpty, addButton, addButtonTo } from '../ui/shell.js';
 import { createZoom, subscribe } from '../view/zoom.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
+import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
+import {
+  createEditor,
+  setTool,
+  setPage,
+  pointerDown,
+  pointerMove,
+  pointerUp,
+  closePoly,
+  deleteSelection,
+  nudge,
+  selected,
+} from '../view/editor.js';
+import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
 import { toast } from '../ui/toast.js';
+
+const TOOL_ICONS = { select: '↖', rect: '▭', poly: '⬠' };
 
 export function boot(opts = {}) {
   const shell = createShell();
@@ -14,7 +30,170 @@ export function boot(opts = {}) {
   const stack = createPageStack({ container: shell.canvas, zoom });
   renderZoomControl({ container: shell.canvas, zoom });
 
+  const ed = createEditor({ pageW: 595, pageH: 842 });
+  const hist = createHistory(JSON.stringify(ed.regions));
+  const overlays = new Map();
   let state = 'idle';
+  let drawing = false;
+
+  const snapshot = () => JSON.stringify(ed.regions);
+  const record = (key) => commit(hist, snapshot(), key ? { key } : {});
+
+  function render() {
+    for (const [page, ov] of overlays) {
+      drawRegions(ov, regionsOfPage(ed.regions, page), {
+        selectedId: page === ed.page ? ed.selectedId : null,
+        draft: page === ed.page ? ed.draft : null,
+      });
+    }
+  }
+
+  // 顶栏左簇：打开 → 撤销 → 重做（工具组是画布左上的浮层，不在这儿）
+  addButton(shell, 'left', '打开', async () => {
+    const file = await pickFile();
+    if (file) load(file);
+  }, { title: '打开 PDF（Ctrl+O）' });
+
+  const undoUi = () => {
+    const prev = undo(hist);
+    if (prev === null) return;
+    ed.regions = JSON.parse(prev);
+    ed.selectedId = null;
+    render();
+  };
+  const redoUi = () => {
+    const next = redo(hist);
+    if (next === null) return;
+    ed.regions = JSON.parse(next);
+    ed.selectedId = null;
+    render();
+  };
+
+  addButton(shell, 'left', '↶', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销' });
+  addButton(shell, 'left', '↷', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做' });
+
+  // 浮动工具组：画布左上
+  const doc = shell.canvas.ownerDocument;
+  const toolGroup = doc.createElement('div');
+  toolGroup.className = 'tool-group';
+  shell.canvas.appendChild(toolGroup);
+
+  const toolButton = (icon, label, tool) => {
+    const btn = addButtonTo(toolGroup, icon, () => {
+      setTool(ed, tool);
+      for (const b of toolGroup.children) b.classList.remove('is-active');
+      btn.classList.add('is-active');
+    }, { title: label, ariaLabel: label });
+    if (tool === ed.tool) btn.classList.add('is-active');
+    return btn;
+  };
+
+  toolButton(TOOL_ICONS.select, '选择 (V)', 'select');
+  toolButton(TOOL_ICONS.rect, '矩形 (R)', 'rect');
+  toolButton(TOOL_ICONS.poly, '多边形 (G)', 'poly');
+
+  function pointOf(ev) {
+    const el = ev.target && ev.target.closest ? ev.target.closest('.page') : null;
+    if (!el) return null;
+    const canvas = el.querySelector('canvas');
+    const box = canvas.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return null;
+    const no = Number(el.dataset.page);
+    const ov = overlays.get(no);
+    const size = ov ? ov.size : { w: ed.pageW, h: ed.pageH };
+    return {
+      no,
+      pt: {
+        x: ((ev.clientX - box.left) / box.width) * size.w,
+        y: ((ev.clientY - box.top) / box.height) * size.h,
+      },
+      size,
+    };
+  }
+
+  shell.canvas.addEventListener('pointerdown', (ev) => {
+    if (state !== 'ready') return;
+    const hit = pointOf(ev);
+    if (!hit) return;
+    if (hit.no !== ed.page) setPage(ed, hit.no);
+    ed.pageW = hit.size.w;
+    ed.pageH = hit.size.h;
+    drawing = true;
+    pointerDown(ed, hit.pt);
+    render();
+  });
+
+  shell.canvas.addEventListener('pointermove', (ev) => {
+    if (!drawing || state !== 'ready') return;
+    const hit = pointOf(ev);
+    if (!hit) return;
+    pointerMove(ed, hit.pt);
+    render();
+  });
+
+  shell.canvas.addEventListener('pointerup', (ev) => {
+    if (!drawing) return;
+    drawing = false;
+    const hit = pointOf(ev);
+    if (!hit) return;
+    const before = snapshot();
+    pointerUp(ed, hit.pt);
+    if (snapshot() !== before) record(null);
+    render();
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    const tag = ev.target && ev.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
+      ev.preventDefault();
+      const prev = undo(hist);
+      if (prev !== null) {
+        ed.regions = JSON.parse(prev);
+        ed.selectedId = null;
+        render();
+      }
+      return;
+    }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') {
+      ev.preventDefault();
+      const next = redo(hist);
+      if (next !== null) {
+        ed.regions = JSON.parse(next);
+        ed.selectedId = null;
+        render();
+      }
+      return;
+    }
+    if (ev.key === 'v' || ev.key === 'V') setTool(ed, 'select');
+    if (ev.key === 'r' || ev.key === 'R') setTool(ed, 'rect');
+    if (ev.key === 'g' || ev.key === 'G') setTool(ed, 'poly');
+    if (ev.key === 'Enter' && closePoly(ed)) {
+      record(null);
+      render();
+    }
+    if (ev.key === 'Escape') {
+      ed.draft = null;
+      ed.selectedId = null;
+      render();
+    }
+    if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      if (deleteSelection(ed)) {
+        record(null);
+        render();
+      }
+    }
+    const step = ev.altKey ? 10 : 1;
+    if (ev.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(ev.key)) {
+      ev.preventDefault();
+      const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0;
+      const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0;
+      if (nudge(ed, dx, dy)) {
+        record('nudge');
+        render();
+      }
+    }
+  });
 
   const load = async (file) => {
     state = 'loading';
@@ -23,6 +202,17 @@ export function boot(opts = {}) {
     try {
       const doc = await openFile(file, opts);
       const n = await stack.mount(doc);
+
+      overlays.clear();
+      for (const p of stack.pages) {
+        const vp = p.page.getViewport({ scale: 1 });
+        overlays.set(p.no, createOverlay(p.wrap, { w: vp.width, h: vp.height }));
+      }
+      ed.page = 1;
+      ed.pageW = stack.pages.length > 0 ? overlays.get(1).size.w : 595;
+      ed.pageH = stack.pages.length > 0 ? overlays.get(1).size.h : 842;
+
+      render();
       setTitle(shell, file.name + ' · ' + n + ' 页');
       state = 'ready';
     } catch (e) {
@@ -32,15 +222,9 @@ export function boot(opts = {}) {
     }
   };
 
-  addButton(shell, 'left', '打开', async () => {
-    const file = await pickFile();
-    if (file) load(file);
-  }, { title: '打开 PDF（Ctrl+O）' });
-
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => stack.applyZoom());
 
-  // 验收用：index.html?pdf=<本地 URL> 直接打开，省一次点击（不影响正常使用）。
   if (opts.url) {
     const name = String(opts.url).split('/').pop() || 'document.pdf';
     fetch(opts.url)
@@ -49,16 +233,12 @@ export function boot(opts = {}) {
       .catch((e) => toast('打不开 ' + opts.url + '：' + e.message));
   }
 
-  return {
-    shell,
-    zoom,
-    stack,
-    load,
-    status: () => state,
-  };
+  return { shell, zoom, stack, editor: ed, history: hist, load, render, status: () => state };
 }
 
 // 骨架里声明的名字：读装配后的状态
 export function status(booted) {
   return booted.status();
 }
+
+export { selected };
