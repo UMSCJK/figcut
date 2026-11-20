@@ -21,11 +21,24 @@ const pct = (v) => {
   return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%';
 };
 
-export function stepIndex(scale) {
+// 步进用的档位表 = 预设 + 当前「页宽」实时比例。
+// 比如页宽是 188%，那从 150% 往上一步就是 188%，不是 200%。
+export function stepList(fitWidth) {
+  const list = STEPS.slice();
+  if (Number.isFinite(fitWidth) && fitWidth > 0.05 && fitWidth < 20) {
+    const hit = list.some((v) => Math.abs(v - fitWidth) < 0.001);
+    if (!hit) list.push(fitWidth);
+  }
+  list.sort((a, b) => a - b);
+  return list;
+}
+
+export function stepIndex(scale, list) {
+  const arr = list || STEPS;
   let best = 0;
   let bestD = Infinity;
-  for (let i = 0; i < STEPS.length; i += 1) {
-    const d = Math.abs(STEPS[i] - scale);
+  for (let i = 0; i < arr.length; i += 1) {
+    const d = Math.abs(arr[i] - scale);
     if (d < bestD) {
       bestD = d;
       best = i;
@@ -148,13 +161,17 @@ export function renderZoomControl(opts) {
   sync();
   z.listeners.add(sync);
 
+  const currentList = () => stepList(fitPcts().width);
+
   minus.addEventListener('click', () => {
-    const i = stepIndex(z.scale);
-    setScale(z, STEPS[Math.max(0, i - 1)]);
+    const list = currentList();
+    const i = stepIndex(z.scale, list);
+    setScale(z, list[Math.max(0, i - 1)]);
   });
   plus.addEventListener('click', () => {
-    const i = stepIndex(z.scale);
-    setScale(z, STEPS[Math.min(STEPS.length - 1, i + 1)]);
+    const list = currentList();
+    const i = stepIndex(z.scale, list);
+    setScale(z, list[Math.min(list.length - 1, i + 1)]);
   });
 
   return { box, sync, menu };

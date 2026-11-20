@@ -7,7 +7,7 @@ import { stepZoom, fitPageScale, fitWidthScale } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
 import { ICONS } from '../ui/icons.js';
-import { STEPS, stepIndex } from '../ui/zoom-control.js';
+import { stepList, stepIndex } from '../ui/zoom-control.js';
 import { labelOfKind } from '../ui/inspector.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
@@ -907,9 +907,10 @@ export function boot(opts = {}) {
     const from = zoom.scale;
     const dir = wheelAcc < 0 ? 1 : -1;
     wheelAcc = 0;
-    // 只在预设档位上跳，绝不出现 143% 这种半吊子倍率
-    const i = stepIndex(from);
-    const to = STEPS[Math.min(STEPS.length - 1, Math.max(0, i + dir))];
+    // 档位表 = 预设 + 实时页宽比例，绝不会停在 143% 这种半吊子值
+    const list = stepList(fitWidthScale(fitDims()));
+    const i = stepIndex(from, list);
+    const to = list[Math.min(list.length - 1, Math.max(0, i + dir))];
     if (Math.abs(to - from) < 1e-6) return;
     setScale(zoom, to);
     stack.setVisualScale(zoom.scale);

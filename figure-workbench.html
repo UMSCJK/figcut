@@ -1385,11 +1385,24 @@ const pct = (v) => {
   return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%';
 };
 
-function stepIndex(scale) {
+// 步进用的档位表 = 预设 + 当前「页宽」实时比例。
+// 比如页宽是 188%，那从 150% 往上一步就是 188%，不是 200%。
+function stepList(fitWidth) {
+  const list = STEPS.slice();
+  if (Number.isFinite(fitWidth) && fitWidth > 0.05 && fitWidth < 20) {
+    const hit = list.some((v) => Math.abs(v - fitWidth) < 0.001);
+    if (!hit) list.push(fitWidth);
+  }
+  list.sort((a, b) => a - b);
+  return list;
+}
+
+function stepIndex(scale, list) {
+  const arr = list || STEPS;
   let best = 0;
   let bestD = Infinity;
-  for (let i = 0; i < STEPS.length; i += 1) {
-    const d = Math.abs(STEPS[i] - scale);
+  for (let i = 0; i < arr.length; i += 1) {
+    const d = Math.abs(arr[i] - scale);
     if (d < bestD) {
       bestD = d;
       best = i;
@@ -1512,13 +1525,17 @@ function renderZoomControl(opts) {
   sync();
   z.listeners.add(sync);
 
+  const currentList = () => stepList(fitPcts().width);
+
   minus.addEventListener('click', () => {
-    const i = stepIndex(z.scale);
-    setScale(z, STEPS[Math.max(0, i - 1)]);
+    const list = currentList();
+    const i = stepIndex(z.scale, list);
+    setScale(z, list[Math.max(0, i - 1)]);
   });
   plus.addEventListener('click', () => {
-    const i = stepIndex(z.scale);
-    setScale(z, STEPS[Math.min(STEPS.length - 1, i + 1)]);
+    const list = currentList();
+    const i = stepIndex(z.scale, list);
+    setScale(z, list[Math.min(list.length - 1, i + 1)]);
   });
 
   return { box, sync, menu };
@@ -5186,9 +5203,10 @@ function boot(opts = {}) {
     const from = zoom.scale;
     const dir = wheelAcc < 0 ? 1 : -1;
     wheelAcc = 0;
-    // 只在预设档位上跳，绝不出现 143% 这种半吊子倍率
-    const i = stepIndex(from);
-    const to = STEPS[Math.min(STEPS.length - 1, Math.max(0, i + dir))];
+    // 档位表 = 预设 + 实时页宽比例，绝不会停在 143% 这种半吊子值
+    const list = stepList(fitWidthScale(fitDims()));
+    const i = stepIndex(from, list);
+    const to = list[Math.min(list.length - 1, Math.max(0, i + dir))];
     if (Math.abs(to - from) < 1e-6) return;
     setScale(zoom, to);
     stack.setVisualScale(zoom.scale);
