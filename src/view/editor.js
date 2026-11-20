@@ -154,13 +154,14 @@ export function pointerUp(ed, pt) {
   }
 
   if (ed.draft && ed.draft.shape === 'poly') {
+    // 只有"点回首点"才闭合；否则继续加点（Enter 走 closePoly）
     const first = ed.draft.points[0];
     const nearFirst = Math.hypot(pt.x - first.x, pt.y - first.y) <= 8;
-    if (nearFirst && ed.draft.points.length >= 4) ed.draft.points.pop();
-    if (ed.draft.points.length < 3) return null;
-    const points = ed.draft.points.map((p) => ({ x: p.x, y: p.y }));
-    ed.draft = null;
-    return addRegion(ed, { shape: 'poly', points });
+    if (nearFirst && ed.draft.points.length >= 4) {
+      ed.draft.points.pop();
+      return closePoly(ed);
+    }
+    return null;
   }
 
   if (ed.drag) {
