@@ -1,21 +1,29 @@
 // 极简可订阅状态容器
-// 状态：骨架。接口已冻结，实现待补（core.store）。
+// 状态：已实现。setState 传函数时按 (prev) => next 计算。
 
-import { notImplemented } from '../core/errors.js';
-
-export function createStore(...args) {
-  throw notImplemented('core.store.createStore');
+export function createStore(initial) {
+  return {
+    state: initial,
+    subscribers: new Set(),
+  };
 }
 
-export function getState(...args) {
-  throw notImplemented('core.store.getState');
+export function getState(s) {
+  return s.state;
 }
 
-export function setState(...args) {
-  throw notImplemented('core.store.setState');
+export function setState(s, next) {
+  const prev = s.state;
+  const value = typeof next === 'function' ? next(prev) : next;
+  if (Object.is(value, prev)) return prev;
+  s.state = value;
+  for (const fn of s.subscribers) fn(value, prev);
+  return value;
 }
 
-export function subscribe(...args) {
-  throw notImplemented('core.store.subscribe');
+export function subscribe(s, fn) {
+  s.subscribers.add(fn);
+  return () => {
+    s.subscribers.delete(fn);
+  };
 }
-
