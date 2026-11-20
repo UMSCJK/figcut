@@ -594,7 +594,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .inspector { display: flex; align-items: center; gap: 4px; min-width: 0; }
 
-.region-kind, .region-q, .region-note {
+.region-q, .region-note {
   height: 22px;
   border: 1px solid var(--line-strong);
   border-radius: 5px;
@@ -1905,9 +1905,7 @@ function createPageStack(opts) {
       const rowEl = doc.createElement('div');
       rowEl.className = 'page-row';
       rowEl.dataset.row = String(i);
-      // 书式：单页那行靠右/靠左，别和下面的双页行错开
-      if (view.dual && row.length === 1) rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
-      // 书式：第 1 页单独在右；末页落单时在左
+      // 书式：第 1 页单独在右，末页落单在左，别和双页行错开
       if (view.dual && row.length === 1) {
         rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
       }
@@ -2793,6 +2791,12 @@ function renderPageList(host, opts) {
   }
 
   host.appendChild(list);
+
+  // 中间滚到哪，左栏就把它滚进可视区（只滚左栏，不动画布）
+  const active = list.querySelector('.page-item.is-current');
+  if (active && active.scrollIntoView) {
+    active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
   return list;
 }
 
@@ -3480,6 +3484,25 @@ async function reopenRecent(entry) {
     return file;
   } catch (e) {
     return null;
+  }
+}
+
+// 从最近列表踢掉时，把缓存字节和句柄一起删掉，别让 IndexedDB 无限长大
+async function forgetFile(name, size) {
+  if (!hasIdb()) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE, BYTES_STORE], 'readwrite');
+      tx.objectStore(STORE).delete(handleKey(name, size));
+      tx.objectStore(BYTES_STORE).delete(handleKey(name, size));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -4993,6 +5016,13 @@ function boot(opts = {}) {
     render();
   });
 
+  // 键盘缩放和滚轮/按钮共用同一张表（预设 + 实时页宽）
+  function stepZoomTo(dir) {
+    const list = stepList(fitWidthScale(fitDims()));
+    const i = stepIndex(zoom.scale, list);
+    setScale(zoom, list[Math.min(list.length - 1, Math.max(0, i + dir))]);
+  }
+
   // ---- 快捷键：统一走 app/shortcuts 的键表 ----
   const fitDims = () => {
     const ov = overlays.get(ed.page);
@@ -5021,6 +5051,7 @@ function boot(opts = {}) {
   const lbCanvas = document.getElementById('lightbox-canvas');
   const lbNo = document.getElementById('lb-no');
   let lbPage = 1;
+  let lbMode = 'page'; // 'page' = PDF 页预览，'figure' = 单个 figure 预览
 
   async function drawLightbox() {
     const p = stack.pages.find((x) => x.no === lbPage);
@@ -5040,6 +5071,7 @@ function boot(opts = {}) {
 
   function openLightbox(no) {
     if (!lb) return;
+    lbMode = 'page';
     lbPage = no;
     lb.hidden = false;
     const bar = document.querySelector('.lightbox-bar');
@@ -5062,6 +5094,7 @@ function boot(opts = {}) {
       openLightbox(region.page);
       return;
     }
+    lbMode = 'figure';
     lb.hidden = false;
     const bar = document.querySelector('.lightbox-bar');
     if (bar) {
@@ -5128,8 +5161,14 @@ function boot(opts = {}) {
     });
     document.addEventListener('keydown', (ev) => {
       if (lb.hidden) return;
-      if (ev.key === 'Escape') closeLightbox();
-      else if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
+      if (ev.key === 'Escape') {
+        closeLightbox();
+        ev.preventDefault();
+        return;
+      }
+      // 单图预览时不翻 PDF 页（不然看着图跳到别的页去了）
+      if (lbMode !== 'page') return;
+      if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
       else if (ev.key === 'ArrowRight') { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); }
       else return;
       ev.preventDefault();
@@ -5162,8 +5201,8 @@ function boot(opts = {}) {
     'page.minus10': () => goPage(stack.current - 10),
     'page.first': () => goPage(1),
     'page.last': () => goPage(stack.pages.length),
-    'zoom.in': () => setScale(zoom, stepZoom(zoom.scale, 1)),
-    'zoom.out': () => setScale(zoom, stepZoom(zoom.scale, -1)),
+    'zoom.in': () => stepZoomTo(1),
+    'zoom.out': () => stepZoomTo(-1),
     'zoom.reset': () => setScale(zoom, 1),
     'zoom.fitPage': () => setFit(zoom, 'width', fitDims()),
     'zoom.fitWidth': () => setFit(zoom, 'width', fitDims()),
@@ -5351,11 +5390,15 @@ function boot(opts = {}) {
   function pushRecent(entry) {
     const list = readRecent().filter((x) => !(x.name === entry.name && x.size === entry.size));
     list.unshift(entry);
+    const keep = list.slice(0, 8);
+    const dropped = list.slice(8);
     try {
-      storage && storage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 8)));
+      storage && storage.setItem(RECENT_KEY, JSON.stringify(keep));
     } catch (e) {
       /* 存不下无所谓 */
     }
+    // 被挤出最近列表的，缓存字节也一起清掉（40MB×N 不能无限攒）
+    for (const old of dropped) forgetFile(old.name, old.size);
     renderRecent();
   }
 

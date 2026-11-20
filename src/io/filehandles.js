@@ -117,6 +117,25 @@ export async function reopenRecent(entry) {
   }
 }
 
+// 从最近列表踢掉时，把缓存字节和句柄一起删掉，别让 IndexedDB 无限长大
+export async function forgetFile(name, size) {
+  if (!hasIdb()) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE, BYTES_STORE], 'readwrite');
+      tx.objectStore(STORE).delete(handleKey(name, size));
+      tx.objectStore(BYTES_STORE).delete(handleKey(name, size));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // 依次尝试：句柄 → 本地缓存字节；都没有才返回 null
 export async function openRecent(entry) {
   const viaHandle = await reopenRecent(entry);

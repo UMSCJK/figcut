@@ -123,9 +123,7 @@ export function createPageStack(opts) {
       const rowEl = doc.createElement('div');
       rowEl.className = 'page-row';
       rowEl.dataset.row = String(i);
-      // 书式：单页那行靠右/靠左，别和下面的双页行错开
-      if (view.dual && row.length === 1) rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
-      // 书式：第 1 页单独在右；末页落单时在左
+      // 书式：第 1 页单独在右，末页落单在左，别和双页行错开
       if (view.dual && row.length === 1) {
         rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
       }

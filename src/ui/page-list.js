@@ -50,6 +50,12 @@ export function renderPageList(host, opts) {
   }
 
   host.appendChild(list);
+
+  // 中间滚到哪，左栏就把它滚进可视区（只滚左栏，不动画布）
+  const active = list.querySelector('.page-item.is-current');
+  if (active && active.scrollIntoView) {
+    active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
   return list;
 }
 

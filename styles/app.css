@@ -523,7 +523,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .inspector { display: flex; align-items: center; gap: 4px; min-width: 0; }
 
-.region-kind, .region-q, .region-note {
+.region-q, .region-note {
   height: 22px;
   border: 1px solid var(--line-strong);
   border-radius: 5px;

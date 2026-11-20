@@ -3,7 +3,7 @@
 
 import { createShell, setTitle, setEmpty, addButton, addButtonTo } from '../ui/shell.js';
 import { createZoom, subscribe, setScale, setFit, anchorAt } from '../view/zoom.js';
-import { stepZoom, fitPageScale, fitWidthScale } from '../core/layout.js';
+import { fitPageScale, fitWidthScale } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
 import { ICONS } from '../ui/icons.js';
@@ -37,7 +37,7 @@ import {
 } from '../view/editor.js';
 import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
-import { pickWithHandle, saveHandle, openRecent, cacheBytes, hasPickHandle } from '../io/filehandles.js';
+import { pickWithHandle, saveHandle, openRecent, cacheBytes, forgetFile, hasPickHandle } from '../io/filehandles.js';
 import { exportZip } from '../app/export-zip.js';
 import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
 import { createTheme, applyTheme, loadTheme, saveTheme, isInverted, resolvedUi } from '../ui/theme.js';
@@ -691,6 +691,13 @@ export function boot(opts = {}) {
     render();
   });
 
+  // 键盘缩放和滚轮/按钮共用同一张表（预设 + 实时页宽）
+  function stepZoomTo(dir) {
+    const list = stepList(fitWidthScale(fitDims()));
+    const i = stepIndex(zoom.scale, list);
+    setScale(zoom, list[Math.min(list.length - 1, Math.max(0, i + dir))]);
+  }
+
   // ---- 快捷键：统一走 app/shortcuts 的键表 ----
   const fitDims = () => {
     const ov = overlays.get(ed.page);
@@ -719,6 +726,7 @@ export function boot(opts = {}) {
   const lbCanvas = document.getElementById('lightbox-canvas');
   const lbNo = document.getElementById('lb-no');
   let lbPage = 1;
+  let lbMode = 'page'; // 'page' = PDF 页预览，'figure' = 单个 figure 预览
 
   async function drawLightbox() {
     const p = stack.pages.find((x) => x.no === lbPage);
@@ -738,6 +746,7 @@ export function boot(opts = {}) {
 
   function openLightbox(no) {
     if (!lb) return;
+    lbMode = 'page';
     lbPage = no;
     lb.hidden = false;
     const bar = document.querySelector('.lightbox-bar');
@@ -760,6 +769,7 @@ export function boot(opts = {}) {
       openLightbox(region.page);
       return;
     }
+    lbMode = 'figure';
     lb.hidden = false;
     const bar = document.querySelector('.lightbox-bar');
     if (bar) {
@@ -826,8 +836,14 @@ export function boot(opts = {}) {
     });
     document.addEventListener('keydown', (ev) => {
       if (lb.hidden) return;
-      if (ev.key === 'Escape') closeLightbox();
-      else if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
+      if (ev.key === 'Escape') {
+        closeLightbox();
+        ev.preventDefault();
+        return;
+      }
+      // 单图预览时不翻 PDF 页（不然看着图跳到别的页去了）
+      if (lbMode !== 'page') return;
+      if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
       else if (ev.key === 'ArrowRight') { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); }
       else return;
       ev.preventDefault();
@@ -860,8 +876,8 @@ export function boot(opts = {}) {
     'page.minus10': () => goPage(stack.current - 10),
     'page.first': () => goPage(1),
     'page.last': () => goPage(stack.pages.length),
-    'zoom.in': () => setScale(zoom, stepZoom(zoom.scale, 1)),
-    'zoom.out': () => setScale(zoom, stepZoom(zoom.scale, -1)),
+    'zoom.in': () => stepZoomTo(1),
+    'zoom.out': () => stepZoomTo(-1),
     'zoom.reset': () => setScale(zoom, 1),
     'zoom.fitPage': () => setFit(zoom, 'width', fitDims()),
     'zoom.fitWidth': () => setFit(zoom, 'width', fitDims()),
@@ -1049,11 +1065,15 @@ export function boot(opts = {}) {
   function pushRecent(entry) {
     const list = readRecent().filter((x) => !(x.name === entry.name && x.size === entry.size));
     list.unshift(entry);
+    const keep = list.slice(0, 8);
+    const dropped = list.slice(8);
     try {
-      storage && storage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 8)));
+      storage && storage.setItem(RECENT_KEY, JSON.stringify(keep));
     } catch (e) {
       /* 存不下无所谓 */
     }
+    // 被挤出最近列表的，缓存字节也一起清掉（40MB×N 不能无限攒）
+    for (const old of dropped) forgetFile(old.name, old.size);
     renderRecent();
   }
 
