@@ -11,6 +11,7 @@ import { createPageStack } from '../view/page-stack.js';
 import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
 import { createPreview, renderPreview } from '../ui/preview.js';
 import { renderRegions } from '../ui/region-list.js';
+import { renderPageList } from '../ui/page-list.js';
 import { boundsOf } from '../view/editor.js';
 import {
   createEditor,
@@ -135,6 +136,7 @@ export function boot(opts = {}) {
   listHost.className = 'region-list';
   shell.panelRight.append(previewHost, listHost);
   const preview = createPreview(previewHost);
+  let lastListSig = '';
 
   function selectRegion(region) {
     if (!region) {
@@ -163,6 +165,18 @@ export function boot(opts = {}) {
       renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
     } else {
       renderPreview(preview, { source, pageW, pageH, selectedId: null, regions: regionsOfPage(ed.regions, ed.page) });
+    }
+
+    // 左栏：页码 + 标注数（只在签名变了才重建，画框拖动时不重排）
+    const sig = stack.pages.length + ':' + ed.regions.length + ':' + ed.page;
+    if (sig !== lastListSig) {
+      lastListSig = sig;
+      renderPageList(shell.panelLeft, {
+        pages: stack.pages,
+        current: ed.page,
+        regions: ed.regions,
+        onPick: (no) => goPage(no),
+      });
     }
 
     renderRegions(listHost, {

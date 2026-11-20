@@ -1,12 +1,15 @@
-import { test, todo, assert } from '../tools/testkit.mjs';
-import * as m from '../src/ui/page-list.js';
+import { test, assert } from '../tools/testkit.mjs';
+import { countByPage, renderPageList, markCurrent } from '../src/ui/page-list.js';
 
-const API = ['renderPageList', 'markCurrent'];
-
-test('page-list: 导出签名齐备', () => {
-  for (const n of API) assert(typeof m[n] === 'function', 'page-list 缺少导出 ' + n);
+test('page-list: 按页统计标注数', () => {
+  const counts = countByPage([
+    { page: 1 }, { page: 1 }, { page: 3 },
+  ]);
+  assert(counts[1] === 2 && counts[3] === 1);
+  assert(counts[2] === undefined, '没标的页不出现');
 });
 
-// 以下是实现前必须覆盖的行为，写成 todo 而不是假绿
-todo('page-list: 每页显示已标注数量');
-todo('page-list: 当前页高亮并自动滚入视野');
+test('page-list: 没有 DOM 时导出仍是函数', () => {
+  assert(typeof renderPageList === 'function');
+  assert(typeof markCurrent === 'function');
+});

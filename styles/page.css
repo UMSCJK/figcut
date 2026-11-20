@@ -177,3 +177,37 @@
 .region-del:hover { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--fg); }
 .handle { fill: #ffffff; stroke: #ff8c00; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .handle.is-poly { stroke: #1c6ef2; }
+
+/* 左栏页面列表 */
+.page-list { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+
+.page-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.page-item:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.page-item.is-current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+.page-no { font-variant-numeric: tabular-nums; }
+
+.page-count {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fg);
+  font-size: 11px;
+  text-align: center;
+}
+
+.page-count:empty { visibility: hidden; }
