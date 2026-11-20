@@ -540,9 +540,10 @@ export function boot(opts = {}) {
   });
 
   // 浮动工具组：画布左上
+  // 工具组放进顶栏（撤销/重做右边），不跟画布一起滚
   const toolGroup = doc.createElement('div');
   toolGroup.className = 'tool-group';
-  shell.canvas.appendChild(toolGroup);
+  shell.left.appendChild(toolGroup);
 
   const toolButtons = new Map();
 
@@ -1118,7 +1119,7 @@ export function boot(opts = {}) {
     // 保证中间画布至少 420px，侧栏再大也不许把画布挤没
     const minCanvas = 420;
     const wantSide = layout.side || 210;
-    const wantPanel = layout.panel || 250;
+    const wantPanel = 210;
     const avail = Math.max(240, vw - minCanvas - 10);
     let side = wantSide;
     let panel = wantPanel;

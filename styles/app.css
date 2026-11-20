@@ -248,20 +248,19 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* ---------- 浮动工具组与缩放 ---------- */
 
+/* 顶栏里的工具组：和撤销/重做同一排 */
 .tool-group {
-  position: absolute;
-  left: 12px;
-  top: 10px;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
-  border-radius: 9px;
+  margin-left: 4px;
+  padding: 2px;
+  border-radius: var(--r-ctl);
   background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-2);
-  z-index: 6;
+  border: 1px solid var(--line-strong);
 }
+
+.tool-group .icon-btn { width: 28px; height: 22px; border-radius: 4px; }
 
 .tool-group .icon-btn { width: 30px; height: 28px; border-radius: 6px; }
 

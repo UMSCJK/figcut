@@ -319,20 +319,19 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* ---------- 浮动工具组与缩放 ---------- */
 
+/* 顶栏里的工具组：和撤销/重做同一排 */
 .tool-group {
-  position: absolute;
-  left: 12px;
-  top: 10px;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
-  border-radius: 9px;
+  margin-left: 4px;
+  padding: 2px;
+  border-radius: var(--r-ctl);
   background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-2);
-  z-index: 6;
+  border: 1px solid var(--line-strong);
 }
+
+.tool-group .icon-btn { width: 28px; height: 22px; border-radius: 4px; }
 
 .tool-group .icon-btn { width: 30px; height: 28px; border-radius: 6px; }
 
@@ -1656,7 +1655,10 @@ function buildControls(doc, region, onChange, opts = {}) {
   }
   function open() {
     const r = kindBtn.getBoundingClientRect();
-    menu.style.left = Math.round(r.left) + 'px';
+    const width = menu.offsetWidth || 160;
+    // 贴着右栏时别让弹层越过窗口右边界
+    const left = Math.max(6, Math.min(Math.round(r.left), window.innerWidth - width - 6));
+    menu.style.left = left + 'px';
     menu.style.top = Math.round(r.bottom + 4) + 'px';
     menu.hidden = false;
     doc.addEventListener('pointerdown', onOutside, true);
@@ -1669,7 +1671,8 @@ function buildControls(doc, region, onChange, opts = {}) {
       if (c.dataset.kind === 'stem') setKind(region, 'stem');
       else toggleLetter(region, c.dataset.kind);
       sync();
-      onChange(region, { structural: true });
+      // 只更新状态，不重建列表——否则弹层会被移除，多选就得点一次开一次
+      onChange(region, { quiet: true, noRebuild: true });
     });
   }
   custom.addEventListener('input', () => {
@@ -4816,9 +4819,10 @@ function boot(opts = {}) {
   });
 
   // 浮动工具组：画布左上
+  // 工具组放进顶栏（撤销/重做右边），不跟画布一起滚
   const toolGroup = doc.createElement('div');
   toolGroup.className = 'tool-group';
-  shell.canvas.appendChild(toolGroup);
+  shell.left.appendChild(toolGroup);
 
   const toolButtons = new Map();
 
@@ -5394,7 +5398,7 @@ function boot(opts = {}) {
     // 保证中间画布至少 420px，侧栏再大也不许把画布挤没
     const minCanvas = 420;
     const wantSide = layout.side || 210;
-    const wantPanel = layout.panel || 250;
+    const wantPanel = 210;
     const avail = Math.max(240, vw - minCanvas - 10);
     let side = wantSide;
     let panel = wantPanel;

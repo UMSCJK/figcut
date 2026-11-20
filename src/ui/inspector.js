@@ -124,7 +124,10 @@ export function buildControls(doc, region, onChange, opts = {}) {
   }
   function open() {
     const r = kindBtn.getBoundingClientRect();
-    menu.style.left = Math.round(r.left) + 'px';
+    const width = menu.offsetWidth || 160;
+    // 贴着右栏时别让弹层越过窗口右边界
+    const left = Math.max(6, Math.min(Math.round(r.left), window.innerWidth - width - 6));
+    menu.style.left = left + 'px';
     menu.style.top = Math.round(r.bottom + 4) + 'px';
     menu.hidden = false;
     doc.addEventListener('pointerdown', onOutside, true);
@@ -137,7 +140,8 @@ export function buildControls(doc, region, onChange, opts = {}) {
       if (c.dataset.kind === 'stem') setKind(region, 'stem');
       else toggleLetter(region, c.dataset.kind);
       sync();
-      onChange(region, { structural: true });
+      // 只更新状态，不重建列表——否则弹层会被移除，多选就得点一次开一次
+      onChange(region, { quiet: true, noRebuild: true });
     });
   }
   custom.addEventListener('input', () => {
