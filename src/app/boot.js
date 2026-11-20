@@ -30,6 +30,7 @@ import { openFile, acceptDrop, pickFile } from '../app/open.js';
 import { exportZip } from '../app/export-zip.js';
 import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
 import { createTheme, cycleUi, cyclePdfPreview, applyTheme, loadTheme, saveTheme, isInverted } from '../ui/theme.js';
+import { loadSettings, saveSettings, setDpi, setMargin } from '../app/settings.js';
 import { toast } from '../ui/toast.js';
 
 const TOOL_ICONS = { select: '↖', rect: '▭', poly: '⬠' };
@@ -76,7 +77,13 @@ export function boot(opts = {}) {
     }
     state = 'exporting';
     try {
-      const out = await exportZip({ doc: currentDoc, regions: ed.regions, source: currentName });
+      const out = await exportZip({
+        doc: currentDoc,
+        regions: ed.regions,
+        source: currentName,
+        dpi: settings.dpi,
+        margin: settings.margin,
+      });
       download(out.bytes, out.name);
       toast('已导出 ' + out.files.length + ' 张图 → ' + out.name, { kind: 'info', ms: 5000 });
       return out;
@@ -111,6 +118,8 @@ export function boot(opts = {}) {
     typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
       : false;
+
+  const settings = loadSettings(storage);
 
   function applyColors() {
     applyTheme(theme, document, prefersDark());
@@ -249,6 +258,48 @@ export function boot(opts = {}) {
 
   addButton(shell, 'left', '↶', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销' });
   addButton(shell, 'left', '↷', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做' });
+  // 导出设置：边距 / DPI
+  const settingsBox = doc.createElement('div');
+  settingsBox.className = 'settings-popover';
+  settingsBox.hidden = true;
+
+  const dpiInput = doc.createElement('input');
+  dpiInput.type = 'number';
+  dpiInput.min = '72';
+  dpiInput.max = '1200';
+  dpiInput.value = String(settings.dpi);
+  dpiInput.title = '导出 DPI（72–1200）';
+
+  const marginInput = doc.createElement('input');
+  marginInput.type = 'number';
+  marginInput.min = '0';
+  marginInput.max = '80';
+  marginInput.step = '0.5';
+  marginInput.value = String(settings.margin);
+  marginInput.title = '边距 pt（0–80）';
+
+  const dpiLabel = doc.createElement('label');
+  dpiLabel.textContent = 'DPI';
+  dpiLabel.appendChild(dpiInput);
+  const marginLabel = doc.createElement('label');
+  marginLabel.textContent = '边距';
+  marginLabel.appendChild(marginInput);
+  settingsBox.append(dpiLabel, marginLabel);
+  document.body.appendChild(settingsBox);
+
+  dpiInput.addEventListener('change', () => {
+    dpiInput.value = String(setDpi(settings, dpiInput.value));
+    saveSettings(storage, settings);
+  });
+  marginInput.addEventListener('change', () => {
+    marginInput.value = String(setMargin(settings, marginInput.value));
+    saveSettings(storage, settings);
+  });
+
+  addButton(shell, 'right', '⚙', () => {
+    settingsBox.hidden = !settingsBox.hidden;
+  }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置' });
+
   addButton(shell, 'right', '◐', () => {
     cycleUi(theme);
     applyColors();

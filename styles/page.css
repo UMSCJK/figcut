@@ -230,3 +230,30 @@
 .page-row { display: grid; grid-template-columns: auto auto; }
 .page-row[data-single="right"] > .page { grid-column: 2; }
 .page-row[data-single="left"] > .page { grid-column: 1; }
+
+.settings-popover {
+  position: fixed;
+  top: 50px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  color: var(--fg);
+}
+
+.settings-popover label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+
+.settings-popover input {
+  width: 72px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
