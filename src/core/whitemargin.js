@@ -20,7 +20,8 @@ import { clamp } from './units.js';
 export const MIN_AREA = 12;        // 碎点阈值（字号残渣）；细线（虚线、短横）只要够长就算笔画
 export const HIT_RATIO = 0.1;      // 命中比例：10%
 export const MAX_GROW = 4096;      // 单边外扩上限，防病态页面把框撑爆
-export const TEXT_PAD = 2;         // 文字掩膜外扩像素，吃掉抗锯齿
+export const MAX_SNAP_PT = 12;     // 边界为躲墨最多外挪多少 pt（防跑飞）
+export const TEXT_PAD = 6;         // 文字掩膜外扩像素：吃掉抗锯齿与字形降部（2px 不够，会把降部当笔画）
 
 function idx(mask, x, y) {
   return y * mask.w + x;
@@ -212,92 +213,42 @@ export function whiteBox(mask, shape, textRectsPt) {
     if (c.y1 > y1) y1 = c.y1;
   }
 
-  // 文字盒（像素），用于"边界压到文字就把字让出去"
-  const s = mask.pxPerPt;
-  const tboxes = (textRectsPt || []).map((b) => ({
-    x0: Math.max(0, Math.floor(b.x * s)),
-    x1: Math.min(mask.w - 1, Math.ceil((b.x + b.w) * s)),
-    y0: Math.max(0, Math.floor(b.y * s)),
-    y1: Math.min(mask.h - 1, Math.ceil((b.y + b.h) * s)),
-  }));
-
+  // 图形自身的外接框：文字让出时不能越过它，否则会切笔画
   const fx0 = x0;
   const fy0 = y0;
   const fx1 = x1;
   const fy1 = y1;
 
-  // 边界避让只看笔画墨迹；文字单独处理，否则往外找白线会穿过整段题干
-  const colInk = (x, yA = y0, yB = y1) => {
-    for (let y = yA; y <= yB; y += 1) if (solid[y * mask.w + x] === 1) return true;
+  // 边界只做一件事：不压笔画。压到了就往外挪，但**有上限**（MAX_SNAP_PT）。
+  // 旧逻辑里"压到文字就往外让"会一路穿过整列题干（实测一页能从 168pt 撑到 300pt），
+  // 那条规则是错的：文字根本不参与定框，让字出去靠的是"文字不算笔画"。
+  const s = mask.pxPerPt;
+  const maxSnap = Math.round(MAX_SNAP_PT * s);
+
+  const colInk = (x) => {
+    for (let y = y0; y <= y1; y += 1) if (solid[y * mask.w + x] === 1) return true;
     return false;
   };
-  const rowInk = (y, xA = x0, xB = x1) => {
-    for (let x = xA; x <= xB; x += 1) if (solid[y * mask.w + x] === 1) return true;
+  const rowInk = (y) => {
+    for (let x = x0; x <= x1; x += 1) if (solid[y * mask.w + x] === 1) return true;
     return false;
   };
-  const rowTexts = (y) => tboxes.filter((b) => y >= b.y0 - 1 && y <= b.y1 + 1 && b.x1 >= x0 && b.x0 <= x1);
-  const colTexts = (x) => tboxes.filter((b) => x >= b.x0 - 1 && x <= b.x1 + 1 && b.y1 >= y0 && b.y0 <= y1);
 
-  let changed = true;
-  let guard = 0;
-  while (changed && guard < 128) {
-    changed = false;
-    guard += 1;
-
-    // 4.1 边界不压笔画
-    while (x0 > 0 && colInk(x0)) { x0 -= 1; changed = true; }
-    while (x1 < mask.w - 1 && colInk(x1)) { x1 += 1; changed = true; }
-    while (y0 > 0 && rowInk(y0)) { y0 -= 1; changed = true; }
-    while (y1 < mask.h - 1 && rowInk(y1)) { y1 += 1; changed = true; }
-
-    // 4.2 边界压到文字：优先往框里收，收不进笔画再往外让
-    if (colTexts(x0).length > 0) {
-      const inner = Math.max(...colTexts(x0).map((b) => b.x1 + 2));
-      if (inner <= fx0) x0 = inner;
-      else {
-        let t2 = x0 - 1;
-        while (t2 > 0 && colTexts(t2).length > 0) t2 -= 1;
-        x0 = Math.max(0, t2);
-      }
-      changed = true;
-    }
-    if (colTexts(x1).length > 0) {
-      const inner = Math.min(...colTexts(x1).map((b) => b.x0 - 2));
-      if (inner >= fx1) x1 = inner;
-      else {
-        let t2 = x1 + 1;
-        while (t2 < mask.w - 1 && colTexts(t2).length > 0) t2 += 1;
-        x1 = Math.min(mask.w - 1, t2);
-      }
-      changed = true;
-    }
-    if (rowTexts(y0).length > 0) {
-      const inner = Math.max(...rowTexts(y0).map((b) => b.y1 + 2));
-      if (inner <= fy0) y0 = inner;
-      else {
-        let t2 = y0 - 1;
-        while (t2 > 0 && rowTexts(t2).length > 0) t2 -= 1;
-        y0 = Math.max(0, t2);
-      }
-      changed = true;
-    }
-    if (rowTexts(y1).length > 0) {
-      const inner = Math.min(...rowTexts(y1).map((b) => b.y0 - 2));
-      if (inner >= fy1) y1 = inner;
-      else {
-        let t2 = y1 + 1;
-        while (t2 < mask.h - 1 && rowTexts(t2).length > 0) t2 += 1;
-        y1 = Math.min(mask.h - 1, t2);
-      }
-      changed = true;
-    }
-
+  let moves = 0;
+  while (moves < maxSnap) {
+    let moved = false;
+    if (x0 > 0 && colInk(x0)) { x0 -= 1; moved = true; }
+    if (x1 < mask.w - 1 && colInk(x1)) { x1 += 1; moved = true; }
+    if (y0 > 0 && rowInk(y0)) { y0 -= 1; moved = true; }
+    if (y1 < mask.h - 1 && rowInk(y1)) { y1 += 1; moved = true; }
+    if (!moved) break;
+    moves += 1;
     if (x1 - x0 > MAX_GROW || y1 - y0 > MAX_GROW) return null;
   }
 
   // 最后一道：边必须在这张掩膜上是白的（碎点、抗锯齿残渣也算墨）。
   // 上一步只看"像样的笔画"，这一步看原始墨迹，保证导出图四边 255。
-  guard = 0;
+  let guard = 0;
   const rawCol = (x) => {
     for (let y = y0; y <= y1; y += 1) if (mask.data[y * mask.w + x]) return true;
     return false;
@@ -307,7 +258,8 @@ export function whiteBox(mask, shape, textRectsPt) {
     return false;
   };
   let raw = true;
-  while (raw && guard < 4096) {
+  const rawLimit = Math.round(MAX_SNAP_PT * s);
+  while (raw && guard < rawLimit) {
     raw = false;
     guard += 1;
     if (x0 > 0 && rawCol(x0)) { x0 -= 1; raw = true; }
@@ -317,6 +269,32 @@ export function whiteBox(mask, shape, textRectsPt) {
     if (x1 - x0 > MAX_GROW || y1 - y0 > MAX_GROW) return null;
   }
 
+  // 文字让出：只处理"文字被框边切了一刀"的情况——把那条边往里挪过这段文字。
+  // 永远不往外推（那会一路穿过整栏题干），也不越过图形外接框（那会切笔画）。
+  const maxSnap2 = Math.round(MAX_SNAP_PT * s);
+  for (const b of textRectsPt || []) {
+    const tx0 = Math.floor(b.x * s);
+    const tx1 = Math.ceil((b.x + b.w) * s);
+    const ty0 = Math.floor(b.y * s);
+    const ty1 = Math.ceil((b.y + b.h) * s);
+
+    const overlaps = tx0 <= x1 && tx1 >= x0 && ty0 <= y1 && ty1 >= y0;
+    if (!overlaps) continue;
+    const inside = tx0 >= x0 && tx1 <= x1 && ty0 >= y0 && ty1 <= y1;
+    if (inside) continue; // 文字整段在框里（表格里的数字），不动
+
+    // 上边界被切
+    if (ty0 < y0 && ty1 >= y0 && ty1 + 2 - y0 <= maxSnap2 && ty1 + 2 <= fy0) y0 = ty1 + 2;
+    // 下边界被切
+    if (ty1 > y1 && ty0 <= y1 && y1 - (ty0 - 2) <= maxSnap2 && ty0 - 2 >= fy1) y1 = ty0 - 2;
+    // 左边界被切
+    if (tx0 < x0 && tx1 >= x0 && tx1 + 2 - x0 <= maxSnap2 && tx1 + 2 <= fx0) x0 = tx1 + 2;
+    // 右边界被切
+    if (tx1 > x1 && tx0 <= x1 && x1 - (tx0 - 2) <= maxSnap2 && tx0 - 2 >= fx1) x1 = tx0 - 2;
+  }
+
+  if (x1 <= x0) x1 = x0 + 1;
+  if (y1 <= y0) y1 = y0 + 1;
   return { x: x0 / s, y: y0 / s, w: (x1 - x0 + 1) / s, h: (y1 - y0 + 1) / s };
 }
 
