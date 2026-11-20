@@ -175,3 +175,5 @@
 }
 
 .region-del:hover { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--fg); }
+.handle { fill: #ffffff; stroke: #ff8c00; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.handle.is-poly { stroke: #1c6ef2; }

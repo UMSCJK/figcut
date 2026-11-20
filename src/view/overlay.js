@@ -21,6 +21,31 @@ function put(parent, node) {
   return node;
 }
 
+// 手柄按屏幕像素算大小：pt 尺寸 = 像素 / 当前倍率，缩放到多大都一个手感。
+function addHandle(doc, parent, x, y, size, cls) {
+  const h = doc.createElementNS(NS, 'rect');
+  h.setAttribute('x', x - size / 2);
+  h.setAttribute('y', y - size / 2);
+  h.setAttribute('width', size);
+  h.setAttribute('height', size);
+  h.setAttribute('class', 'handle ' + cls);
+  parent.appendChild(h);
+  return h;
+}
+
+function addHandles(doc, parent, sel, scale) {
+  const size = 8 / Math.max(0.05, scale);
+  if (sel.shape === 'poly') {
+    for (const p of sel.points) addHandle(doc, parent, p.x, p.y, size * 0.8, 'is-poly');
+    return;
+  }
+  const r = sel.rect;
+  addHandle(doc, parent, r.x, r.y, size, 'is-nw');
+  addHandle(doc, parent, r.x + r.w, r.y, size, 'is-ne');
+  addHandle(doc, parent, r.x, r.y + r.h, size, 'is-sw');
+  addHandle(doc, parent, r.x + r.w, r.y + r.h, size, 'is-se');
+}
+
 export function drawRegions(overlay, regions, opts = {}) {
   const doc = overlay.svg.ownerDocument;
   while (overlay.svg.firstChild) overlay.svg.removeChild(overlay.svg.firstChild);
@@ -42,6 +67,9 @@ export function drawRegions(overlay, regions, opts = {}) {
       put(overlay.svg, rect);
     }
   }
+
+  // 选中态画手柄，能拖哪儿一眼看得出
+  if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
 
   const draft = opts.draft;
   if (draft && draft.shape === 'rect') {

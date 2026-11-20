@@ -2,7 +2,7 @@
 // 状态：已实现（打开 PDF、连续滚动、缩放、矩形/多边形标注、撤销重做）。
 
 import { createShell, setTitle, setEmpty, addButton, addButtonTo } from '../ui/shell.js';
-import { createZoom, subscribe, setScale, setFit } from '../view/zoom.js';
+import { createZoom, subscribe, setScale, setFit, anchorAt } from '../view/zoom.js';
 import { stepZoom } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
@@ -188,7 +188,9 @@ export function boot(opts = {}) {
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
         selectedId: page === ed.page ? ed.selectedId : null,
+        selected: page === ed.page ? ed.regions.find((r) => r.id === ed.selectedId) || null : null,
         draft: page === ed.page ? ed.draft : null,
+        scale: zoom.scale,
       });
     }
     renderPanels();
@@ -265,8 +267,17 @@ export function boot(opts = {}) {
     };
   }
 
+  // 中键拖拽平移
+  let pan = null;
   shell.canvas.addEventListener('pointerdown', (ev) => {
-    if (state !== 'ready') return;
+    if (ev.button === 1) {
+      pan = { x: ev.clientX, y: ev.clientY, left: stack.root.scrollLeft, top: stack.root.scrollTop };
+      ev.preventDefault();
+    }
+  });
+
+  shell.canvas.addEventListener('pointerdown', (ev) => {
+    if (state !== 'ready' || ev.button === 1) return;
     const hit = pointOf(ev);
     if (!hit) return;
     if (hit.no !== ed.page) setPage(ed, hit.no);
@@ -278,6 +289,11 @@ export function boot(opts = {}) {
   });
 
   shell.canvas.addEventListener('pointermove', (ev) => {
+    if (pan) {
+      stack.root.scrollLeft = pan.left - (ev.clientX - pan.x);
+      stack.root.scrollTop = pan.top - (ev.clientY - pan.y);
+      return;
+    }
     if (!drawing || state !== 'ready') return;
     const hit = pointOf(ev);
     if (!hit) return;
@@ -286,6 +302,10 @@ export function boot(opts = {}) {
   });
 
   shell.canvas.addEventListener('pointerup', (ev) => {
+    if (pan) {
+      pan = null;
+      return;
+    }
     if (!drawing) return;
     drawing = false;
     const hit = pointOf(ev);
@@ -360,6 +380,21 @@ export function boot(opts = {}) {
   };
 
   bindShortcuts(document, actions);
+
+  // Ctrl+滚轮：以指针为锚点缩放
+  shell.canvas.addEventListener('wheel', (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || state !== 'ready') return;
+    ev.preventDefault();
+    const root = stack.root;
+    const box = root.getBoundingClientRect();
+    const px = ev.clientX - box.left;
+    const py = ev.clientY - box.top;
+    const from = zoom.scale;
+    setScale(zoom, from * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+    const next = anchorAt({ x: root.scrollLeft, y: root.scrollTop }, px, py, from, zoom.scale);
+    root.scrollLeft = next.x;
+    root.scrollTop = next.y;
+  }, { passive: false });
 
   // 滚动时当前页跟着走（右栏预览与列表要跟着变）
   stack.root.addEventListener('scroll', () => {
