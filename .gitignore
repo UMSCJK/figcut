@@ -1,6 +1,5 @@
-# 交付物与临时产物
+# 交付物：figure-workbench.html 入库，每次改完重建提交
 dist/
-figure-workbench.html
 figures_*.zip
 tmp/
 

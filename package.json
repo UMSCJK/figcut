@@ -1,0 +1,12 @@
+{
+  "name": "figcut",
+  "private": true,
+  "type": "module",
+  "description": "单文件 PDF 图区提取工作台（开发期只用 node 跑纯逻辑单测）",
+  "scripts": {
+    "build": "python3 build.py",
+    "check": "python3 build.py --check",
+    "test": "node tools/unit.mjs",
+    "accept": "node tools/accept.mjs --ppm tmp/p9-09.ppm --text tmp/p9.xhtml --ppp 2"
+  }
+}

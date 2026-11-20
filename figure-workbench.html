@@ -1,0 +1,3835 @@
+<!doctype html>
+<html lang="zh-CN" data-ui="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>figcut</title>
+
+
+<style>
+/* figcut 设计令牌：Adwaita 风格浅/深两套 + 排版与控件尺寸。 */
+:root {
+  color-scheme: light;
+  --accent: #3584e4;
+  --accent-hover: #4a90e8;
+  --accent-fg: #ffffff;
+  --opt: #e5a50a;
+  --destructive: #e01b24;
+  --window: #fafafa;
+  --header: #ebebeb;
+  --sidebar: #f2f2f2;
+  --view: #f6f5f4;
+  --card: #ffffff;
+  --page: #ffffff;
+  --page-dark: #1b1b1b;
+  --line: rgba(0, 0, 0, 0.1);
+  --line-strong: rgba(0, 0, 0, 0.18);
+  --hover: rgba(0, 0, 0, 0.06);
+  --active: rgba(0, 0, 0, 0.12);
+  --sel: rgba(53, 132, 228, 0.16);
+  --ink-box: rgba(224, 27, 36, 0.55);
+  --text: rgba(0, 0, 0, 0.88);
+  --text-2: rgba(0, 0, 0, 0.56);
+  --text-3: rgba(0, 0, 0, 0.38);
+  --h-header: 46px;
+  --w-side: 176px;
+  --w-panel: 250px;
+  --r-ctl: 6px;
+  --ctl-h: 28px;
+  --font: "Adwaita Sans", Cantarell, system-ui, -apple-system, "Noto Sans CJK SC", sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "Source Code Pro", monospace;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 3px 9px rgba(0, 0, 0, 0.14);
+}
+
+:root[data-ui="dark"] {
+  color-scheme: dark;
+  --accent: #3584e4;
+  --accent-hover: #4a90e8;
+  --destructive: #ff7b72;
+  --window: #242424;
+  --header: #303030;
+  --sidebar: #2b2b2b;
+  --view: #1e1e1e;
+  --card: #363636;
+  --page: #ffffff;
+  --page-dark: #141414;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --hover: rgba(255, 255, 255, 0.08);
+  --active: rgba(255, 255, 255, 0.14);
+  --sel: rgba(53, 132, 228, 0.32);
+  --ink-box: rgba(255, 123, 114, 0.6);
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.72);
+  --text-3: rgba(255, 255, 255, 0.45);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 3px 9px rgba(0, 0, 0, 0.45);
+}
+
+</style>
+<style>
+/* 布局与组件：顶栏 / 左栏 / 画布 / 右栏。 */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--window);
+  color: var(--text);
+  font: 13px/1.4 var(--font);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--h-header) minmax(0, 1fr);
+  background: var(--window);
+}
+
+/* ---------- 顶栏 ---------- */
+
+.topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: var(--header);
+  border-bottom: 1px solid var(--line);
+}
+
+.cluster { display: flex; align-items: center; gap: 6px; }
+.cluster-right { margin-left: auto; }
+
+.title-block {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 36vw;
+  text-align: center;
+  pointer-events: none;
+}
+
+.title {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitle {
+  font-size: 10.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 按钮 ---------- */
+
+.btn {
+  height: var(--ctl-h);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+.btn:hover { background: var(--hover); }
+
+.btn.suggested {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-fg);
+}
+
+.btn.suggested:hover { background: var(--accent-hover); }
+
+.icon-btn {
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--text-2);
+}
+
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn.on { background: var(--sel); color: var(--accent); }
+.icon-btn svg, .btn svg { display: block; flex: none; }
+
+/* ---------- 三栏 ---------- */
+
+.body {
+  display: grid;
+  grid-template-columns: var(--w-side) minmax(0, 1fr) var(--w-panel);
+  min-height: 0;
+}
+
+.sidebar, .panel { min-height: 0; overflow: auto; background: var(--sidebar); }
+.sidebar { border-right: 1px solid var(--line); }
+.panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+
+.side-head {
+  padding: 9px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+}
+
+/* ---------- 画布 ---------- */
+
+.canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--view);
+}
+
+.pages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 56px 24px 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  overflow-anchor: none;
+}
+
+.page-row { display: flex; align-items: flex-start; justify-content: center; gap: 20px; }
+
+.page {
+  position: relative;
+  background: var(--page);
+  box-shadow: var(--shadow-1);
+  border-radius: 2px;
+}
+
+.page canvas { display: block; width: 100%; height: 100%; border-radius: 2px; }
+.page-overlay { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.regions { width: 100%; height: 100%; overflow: visible; }
+
+.region {
+  fill: rgba(53, 132, 228, 0.06);
+  stroke: var(--accent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.region.is-selected { fill: rgba(53, 132, 228, 0.12); stroke-width: 1.6; }
+
+.region.is-draft {
+  fill: rgba(53, 132, 228, 0.08);
+  stroke-dasharray: 4 3;
+}
+
+.handle {
+  fill: #ffffff;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---------- 浮动工具组与缩放 ---------- */
+
+.tool-group {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  z-index: 6;
+}
+
+.tool-group .icon-btn { width: 30px; height: 28px; border-radius: 6px; }
+
+.zoom-control {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+  height: var(--ctl-h);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.zoom-control .icon-btn { width: 24px; height: 22px; border-radius: 4px; }
+
+.zoom-input {
+  width: 58px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.zoom-input:focus { background: var(--hover); outline: none; }
+
+.zoom-presets {
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+
+/* ---------- 空状态 ---------- */
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  color: var(--text-3);
+}
+
+.empty .big { font-size: 15px; font-weight: 700; color: var(--text-2); }
+.empty .small { font-size: 11.5px; }
+
+/* ---------- 左栏页面列表 ---------- */
+
+.page-list { padding: 2px 6px 8px; display: flex; flex-direction: column; gap: 1px; }
+
+.page-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: left;
+}
+
+.page-item:hover { background: var(--hover); }
+.page-item.is-current { background: var(--sel); color: var(--text); font-weight: 600; }
+.page-no { font-variant-numeric: tabular-nums; }
+
+.page-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-count:empty { display: none; }
+
+/* ---------- 右栏 ---------- */
+
+.preview-host { padding: 8px; }
+
+.preview-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: var(--page);
+  border: 1px solid var(--line);
+}
+
+.region-list { padding: 0 6px 8px; }
+.region-empty { padding: 12px 8px; color: var(--text-3); font-size: 11.5px; line-height: 1.5; }
+
+.region-group {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 4px 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.region-group.is-current { color: var(--text-2); }
+
+.region-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.region-row:hover { background: var(--hover); }
+.region-row.is-selected { background: var(--sel); }
+
+.inspector { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+.region-kind, .region-q, .region-note {
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--card);
+  font-size: 11.5px;
+  min-width: 0;
+}
+
+.region-kind { width: 58px; font-size: 11px; }
+.region-q { width: 48px; font-family: var(--mono); padding: 0 5px; }
+.region-note { flex: 1; padding: 0 5px; border-color: var(--line); color: var(--text-2); }
+.region-label { font-size: 11.5px; color: var(--text-2); }
+
+.region-del {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--destructive);
+}
+
+.region-del:hover { background: var(--hover); }
+
+/* ---------- 弹出设置 ---------- */
+
+.settings-popover {
+  position: fixed;
+  top: 50px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+}
+
+.settings-popover[hidden] { display: none; }
+
+.settings-popover label { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-2); }
+
+.settings-popover input {
+  width: 66px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+/* ---------- 提示条 ---------- */
+
+.banner {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: 70vw;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  font-size: 12.5px;
+  pointer-events: none;
+  box-shadow: var(--shadow-2);
+}
+
+.banner[hidden] { display: none; }
+.banner[data-kind="error"] { background: var(--destructive); }
+
+/* ---------- PDF 预览反相：只反相纸面 ---------- */
+
+:root[data-pdf-invert="1"] .page canvas,
+:root[data-pdf-invert="1"] .preview-canvas { filter: invert(1); }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="cluster cluster-left" id="topbar-left"></div>
+    <div class="title-block"><div class="title" id="topbar-title">figcut</div></div>
+    <div class="cluster cluster-right" id="topbar-right"></div>
+  </header>
+  <main class="body">
+    <aside class="sidebar" id="panel-left"><div class="side-head">页面</div></aside>
+    <div class="canvas" id="canvas">
+      <div class="empty" id="empty">
+        <div class="big">把 PDF 拖进来</div>
+        <div class="small">或点左上角「打开」</div>
+      </div>
+    </div>
+    <aside class="panel" id="panel-right"></aside>
+  </main>
+  <div class="banner" id="banner" hidden></div>
+</div>
+<!-- pdf.js 保持外部引用：file:// 下 classic script 可加载 -->
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+// ---- src/core/errors.js ----
+// 错误类型与未实现占位
+// 状态：骨架。接口已冻结，实现待补。
+
+function figcutError(code, message, context) {
+  const err = new Error(message);
+  err.name = 'FigcutError';
+  err.code = code;
+  err.context = context || {};
+  return err;
+}
+
+function notImplemented(name) {
+  return figcutError('not-implemented', '未实现: ' + name, { name });
+}
+
+// ---- src/ui/shell.js ----
+// 顶栏与三栏骨架
+// 状态：已实现。只读 DOM 引用 + 少量写操作。
+
+
+
+function createShell(root) {
+  const doc = root || (typeof document !== 'undefined' ? document : null);
+  if (!doc) throw figcutError('no-dom', '没有 DOM 就搭不出骨架');
+
+  const el = (id) => {
+    const node = doc.getElementById(id);
+    if (!node) throw figcutError('missing-node', 'index.html 缺少 #' + id, { id });
+    return node;
+  };
+
+  return {
+    left: el('topbar-left'),
+    right: el('topbar-right'),
+    title: el('topbar-title'),
+    canvas: el('canvas'),
+    panelLeft: el('panel-left'),
+    panelRight: el('panel-right'),
+    empty: el('empty'),
+    banner: el('banner'),
+  };
+}
+
+function setTitle(shell, text) {
+  shell.title.textContent = text;
+  return text;
+}
+
+function setFileInfo(shell, text) {
+  shell.title.textContent = text;
+  return text;
+}
+
+function setEmpty(shell, visible) {
+  shell.empty.style.display = visible ? '' : 'none';
+}
+
+function addButtonTo(container, label, onClick, opts = {}) {
+  const doc = (container && container.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+  if (!doc) throw figcutError('no-dom', '没有 DOM 就加不了按钮');
+  const btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.className = opts.kind === 'btn' ? 'btn' : 'icon-btn';
+  if (opts.suggested) btn.classList.add('suggested');
+  if (opts.icon) btn.innerHTML = opts.icon;
+  else btn.textContent = label;
+  if (opts.title) btn.title = opts.title;
+  if (opts.ariaLabel) btn.setAttribute('aria-label', opts.ariaLabel);
+  btn.addEventListener('click', onClick);
+  container.appendChild(btn);
+  return btn;
+}
+
+function addButton(shell, side, label, onClick, opts = {}) {
+  return addButtonTo(side === 'right' ? shell.right : shell.left, label, onClick, opts);
+}
+
+// ---- src/core/units.js ----
+// 单位换算：pdf pt / css px / 输出 dpi
+// 状态：已实现。PDF 坐标一律 pt，页内左上原点、y 向下。
+
+const PT_PER_INCH = 72;
+
+// pt → 导出像素：dpi 是每英寸像素，pt 是 1/72 英寸。
+function pxForDpi(pt, dpi) {
+  return (pt / PT_PER_INCH) * dpi;
+}
+
+// pt → css 像素：scale 是当前缩放倍率（100% = 1）。
+function ptToPx(pt, scale) {
+  return pt * scale;
+}
+
+function pxToPt(px, scale) {
+  if (!Number.isFinite(scale) || scale <= 0) {
+    throw figcutError('bad-scale', '缩放倍率必须是正有限数', { scale });
+  }
+  return px / scale;
+}
+
+// NaN 返回下界（坐标计算里出现 NaN 时宁可贴边也不要写进模型）；
+// 正无穷贴上限、负无穷贴下限，符合夹取直觉。
+function clamp(value, lo, hi) {
+  if (!Number.isFinite(value)) return value === Infinity ? hi : lo;
+  if (lo > hi) return lo;
+  return value < lo ? lo : value > hi ? hi : value;
+}
+
+// ---- src/core/layout.js ----
+// 视图布局：单双页、书式配对、适应缩放、缩放台阶
+// 状态：已实现。纯计算，页尺寸与视口尺寸都由调用方给。
+
+
+
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 8;
+
+// 照 GNOME Papers：
+//   单页 → 每页一行
+//   双页书式（默认）→ 第 1 页单独在右，之后 2|3、4|5
+//   双页 + 奇数页在左 → 1|2、3|4、5|6
+function pageCombos(pageCount, opts = {}) {
+  const dual = !!opts.dual;
+  const oddLeft = !!opts.oddLeft;
+  const rows = [];
+
+  if (!dual) {
+    for (let p = 1; p <= pageCount; p += 1) rows.push([p]);
+    return rows;
+  }
+
+  if (oddLeft) {
+    for (let p = 1; p <= pageCount; p += 2) {
+      rows.push(p + 1 <= pageCount ? [p, p + 1] : [p]);
+    }
+    return rows;
+  }
+
+  if (pageCount >= 1) rows.push([1]);
+  for (let p = 2; p <= pageCount; p += 2) {
+    rows.push(p + 1 <= pageCount ? [p, p + 1] : [p]);
+  }
+  return rows;
+}
+
+// 适应页面：整页必须完整可见，padding 按真实的上下留白算。
+function fitPageScale(opts) {
+  const padX = opts.padX || 0;
+  const padY = opts.padY || 0;
+  const avw = Math.max(1, opts.viewportW - padX * 2);
+  const avh = Math.max(1, opts.viewportH - padY * 2);
+  if (!(opts.pageW > 0) || !(opts.pageH > 0)) return 1;
+  const scale = Math.min(avw / opts.pageW, avh / opts.pageH);
+  return clamp(Math.floor(scale * 1000) / 1000, MIN_SCALE, MAX_SCALE);
+}
+
+// 适应宽度：横向不许出滚动条，所以最后再往下抹一点余量。
+function fitWidthScale(opts) {
+  const padX = opts.padX || 0;
+  const avw = Math.max(1, opts.viewportW - padX * 2);
+  if (!(opts.pageW > 0)) return 1;
+  const scale = avw / opts.pageW;
+  return clamp(Math.floor(scale * 1000) / 1000, MIN_SCALE, MAX_SCALE);
+}
+
+function zoomPresets() {
+  return [0.5, 0.7, 0.85, 1, 1.25, 1.5, 1.75, 2, 3, 4, 8];
+}
+
+// 缩放按钮 / 快捷键：按 ×1.2 步进，并夹在 25%–800%。
+function stepZoom(scale, dir) {
+  const factor = dir >= 0 ? 1.2 : 1 / 1.2;
+  return clamp(Math.round(scale * factor * 1000) / 1000, MIN_SCALE, MAX_SCALE);
+}
+
+// ---- src/view/zoom.js ----
+// 缩放与鼠标锚点
+// 状态：已实现。状态与数学都在这，DOM 由 ui/zoom-control 负责。
+
+
+
+
+function createZoom(opts = {}) {
+  return {
+    scale: opts.scale === undefined ? 1 : opts.scale,
+    mode: 'free',
+    min: MIN_SCALE,
+    max: MAX_SCALE,
+    listeners: new Set(),
+  };
+}
+
+function notify(z) {
+  for (const fn of z.listeners) fn(z.scale, z.mode);
+}
+
+function subscribe(z, fn) {
+  z.listeners.add(fn);
+  return () => z.listeners.delete(fn);
+}
+
+function setScale(z, value) {
+  const next = clamp(Number(value), z.min, z.max);
+  if (!Number.isFinite(next)) return z.scale;
+  z.mode = 'free';
+  if (Math.abs(next - z.scale) < 1e-6) return z.scale;
+  z.scale = next;
+  notify(z);
+  return z.scale;
+}
+
+// 'page' 整页可见，'width' 贴满宽度
+function setFit(z, mode, dims) {
+  const scale =
+    mode === 'page'
+      ? fitPageScale(dims)
+      : mode === 'width'
+        ? fitWidthScale(dims)
+        : z.scale;
+  z.mode = mode;
+  if (Math.abs(scale - z.scale) > 1e-6) {
+    z.scale = scale;
+    notify(z);
+  }
+  return z.scale;
+}
+
+// 以指针为锚点缩放的滚动补偿：指针下的内容不许漂。
+function anchorAt(scroll, px, py, from, to) {
+  if (!(from > 0) || !(to > 0)) return { x: scroll.x, y: scroll.y };
+  const cx = (scroll.x + px) / from;
+  const cy = (scroll.y + py) / from;
+  return {
+    x: Math.max(0, cx * to - px),
+    y: Math.max(0, cy * to - py),
+  };
+}
+
+// ---- src/app/shortcuts.js ----
+// 快捷键表与输入框豁免
+// 状态：已实现。resolveKey 是纯函数，绑定时只负责 preventDefault + 分发。
+
+const KEYMAP = {
+  v: 'tool.select',
+  r: 'tool.rect',
+  g: 'tool.poly',
+  n: 'page.next',
+  p: 'page.prev',
+  f: 'zoom.fitPage',
+  w: 'zoom.fitWidth',
+  '+': 'zoom.in',
+  '=': 'zoom.in',
+  '-': 'zoom.out',
+  c: 'view.continuous',
+  d: 'view.dual',
+  o: 'view.oddLeft',
+};
+
+const TYPING_TAGS = ['INPUT', 'TEXTAREA', 'SELECT'];
+
+function isTyping(ev) {
+  const t = ev.target;
+  if (!t) return false;
+  if (t.isContentEditable) return true;
+  return TYPING_TAGS.includes(String(t.tagName || '').toUpperCase());
+}
+
+// 焦点在输入框时不拦截（Esc 除外），否则用户打不出字母 n。
+function resolveKey(ev) {
+  const key = ev.key;
+  if (!key) return null;
+  const ctrl = !!(ev.ctrlKey || ev.metaKey);
+
+  if (isTyping(ev)) return key === 'Escape' ? 'cancel' : null;
+
+  if (ctrl) {
+    const lower = key.toLowerCase();
+    if (lower === 'z') return 'history.undo';
+    if (lower === 'y') return 'history.redo';
+    if (lower === 'e') return 'export.zip';
+    if (lower === 's') return 'config.save';
+    if (lower === 'o') return 'file.open';
+    if (lower === 'i') return 'view.invert';
+    if (key === '0') return 'zoom.reset';
+    if (key === 'Home') return 'page.first';
+    if (key === 'End') return 'page.last';
+    return null;
+  }
+
+  if (key === 'Escape') return 'cancel';
+  if (key === 'Enter') return 'tool.closePoly';
+  if (key === 'Delete' || key === 'Backspace') return 'region.delete';
+  if (key === 'PageDown') return ev.shiftKey ? 'page.plus10' : 'page.next';
+  if (key === 'PageUp') return ev.shiftKey ? 'page.minus10' : 'page.prev';
+
+  if (key.startsWith('Arrow')) {
+    if (!ev.shiftKey) return null;
+    return 'region.nudge';
+  }
+
+  const mapped = KEYMAP[key.toLowerCase()];
+  return mapped || null;
+}
+
+// nudge 需要方向信息，单独给一个纯函数，方便单测。
+function nudgeVector(ev) {
+  const step = ev.altKey ? 10 : 1;
+  switch (ev.key) {
+    case 'ArrowLeft':
+      return { dx: -step, dy: 0 };
+    case 'ArrowRight':
+      return { dx: step, dy: 0 };
+    case 'ArrowUp':
+      return { dx: 0, dy: -step };
+    case 'ArrowDown':
+      return { dx: 0, dy: step };
+    default:
+      return { dx: 0, dy: 0 };
+  }
+}
+
+function bindShortcuts(target, handlers, opts = {}) {
+  const onKey = (ev) => {
+    const action = resolveKey(ev);
+    if (!action) return;
+    const fn = handlers[action];
+    if (!fn) return;
+    ev.preventDefault();
+    fn(ev, action);
+  };
+  const el = target || (typeof document !== 'undefined' ? document : null);
+  if (!el) return () => {};
+  el.addEventListener('keydown', onKey);
+  return () => el.removeEventListener('keydown', onKey);
+}
+
+// ---- src/view/navigator.js ----
+// 翻页与页码跳转
+// 状态：已实现。真正的滚动由 page-stack 负责，这里只管"该去第几页"。
+
+function createNavigator(stack, opts = {}) {
+  return {
+    stack,
+    total: opts.total || 0,
+    current: 1,
+  };
+}
+
+function clampPage(nav, no) {
+  const total = nav.total || (nav.stack && nav.stack.pages.length) || 1;
+  return Math.min(Math.max(1, Math.round(no)), total);
+}
+
+function gotoPage(nav, no) {
+  const next = clampPage(nav, no);
+  nav.current = next;
+  if (nav.stack) nav.stack.setCurrent(next);
+  return next;
+}
+
+function nextPage(nav, delta = 1) {
+  return gotoPage(nav, nav.current + delta);
+}
+
+function prevPage(nav, delta = 1) {
+  return gotoPage(nav, nav.current - delta);
+}
+
+// 滚动时按"离视口顶部最近的页"更新当前页
+function pageAtScroll(rects, viewportTop) {
+  if (!rects || rects.length === 0) return 1;
+  let best = rects[0];
+  let bestD = Infinity;
+  for (const r of rects) {
+    const d = Math.abs(r.top - viewportTop);
+    if (d < bestD) {
+      bestD = d;
+      best = r;
+    }
+  }
+  return best.no;
+}
+
+// ---- src/ui/icons.js ----
+// 内联 SVG 图标：统一 16x16、currentColor 描边，跟 Adwaita 符号图标一个路数。
+const wrap = (body, opts = {}) =>
+  '<svg width="' + (opts.size || 16) + '" height="' + (opts.size || 16) + '" viewBox="0 0 16 16" fill="none" '
+  + 'stroke="currentColor" stroke-width="' + (opts.width || 1.5) + '" stroke-linecap="round" stroke-linejoin="round">'
+  + body + '</svg>';
+
+const ICONS = {
+  open: wrap('<path d="M2 5.2h4.2l1.3 1.6H14v6.4H2z"/><path d="M2 5.2V3.6h4.2"/>'),
+  undo: wrap('<path d="M6.2 4.2L3 7.4l3.2 3.2"/><path d="M3.4 7.4h5.4a3.6 3.6 0 0 1 0 7.2H6"/>'),
+  redo: wrap('<path d="M9.8 4.2L13 7.4l-3.2 3.2"/><path d="M12.6 7.4H7.2a3.6 3.6 0 0 0 0 7.2H10"/>'),
+  export: wrap('<path d="M8 2.4v7"/><path d="M5.2 6.6L8 9.4l2.8-2.8"/><path d="M3 12.4h10"/>'),
+  settings: wrap('<path d="M2.4 5h11.2M2.4 11h11.2"/><circle cx="6.2" cy="5" r="1.6"/><circle cx="10" cy="11" r="1.6"/>'),
+  uiTheme: wrap('<circle cx="8" cy="8" r="5.6"/><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor" stroke="none"/>'),
+  invert: wrap('<circle cx="8" cy="8" r="5.6"/><path d="M8 2.4v11.2" /><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor" stroke="none"/>'),
+  select: wrap('<path d="M4 2.8l7.4 4.6-3 .8-.8 3z"/>'),
+  rect: wrap('<rect x="2.8" y="3.6" width="10.4" height="8.8" rx="1"/>'),
+  poly: wrap('<path d="M8 2.4l5.2 3.8-2 6.2H4.8l-2-6.2z"/>'),
+  trash: wrap('<path d="M3.4 4.4h9.2"/><path d="M6.4 4.4V3.2h3.2v1.2"/><path d="M4.9 4.4l.5 8.1h5.2l.5-8.1"/>'),
+  minus: wrap('<path d="M3.6 8h8.8"/>'),
+  plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
+};
+
+function icon(name, opts) {
+  return ICONS[name] || wrap('<circle cx="8" cy="8" r="5"/>', opts);
+}
+
+// ---- src/ui/zoom-control.js ----
+// 画布右下角缩放控件：− 100% + ▾
+// 状态：已实现。
+
+
+
+
+
+function renderZoomControl(opts) {
+  const { container, zoom: z } = opts;
+  const doc = container.ownerDocument;
+
+  const box = doc.createElement('div');
+  box.className = 'zoom-control';
+
+  const minus = doc.createElement('button');
+  minus.type = 'button';
+  minus.className = 'icon-btn';
+  minus.innerHTML = ICONS.minus;
+  minus.setAttribute('aria-label', '缩小');
+
+  const input = doc.createElement('input');
+  input.className = 'zoom-input';
+  input.type = 'text';
+  input.inputMode = 'numeric';
+  input.setAttribute('aria-label', '缩放百分比');
+
+  const plus = doc.createElement('button');
+  plus.type = 'button';
+  plus.className = 'icon-btn';
+  plus.innerHTML = ICONS.plus;
+  plus.setAttribute('aria-label', '放大');
+
+  const menu = doc.createElement('select');
+  menu.className = 'zoom-presets';
+  menu.setAttribute('aria-label', '缩放预设');
+  for (const p of zoomPresets()) {
+    const o = doc.createElement('option');
+    o.value = String(p);
+    o.textContent = Math.round(p * 100) + '%';
+    menu.appendChild(o);
+  }
+
+  box.append(minus, input, plus, menu);
+  container.appendChild(box);
+
+  const sync = () => {
+    input.value = Math.round(z.scale * 100) + '%';
+    const want = String(Number(z.scale.toFixed(4)));
+    const has = Array.prototype.some.call(menu.options, (o) => o.value === want);
+    if (has) menu.value = want;
+  };
+  sync();
+
+  minus.addEventListener('click', () => setScale(z, z.scale / 1.2));
+  plus.addEventListener('click', () => setScale(z, z.scale * 1.2));
+  input.addEventListener('change', () => {
+    const n = parseFloat(String(input.value).replace('%', ''));
+    if (Number.isFinite(n) && n > 0) setScale(z, n / 100);
+    else sync();
+  });
+  menu.addEventListener('change', () => setScale(z, Number(menu.value)));
+
+  if (typeof z.listeners !== 'undefined') z.listeners.add(sync);
+
+  return { box, sync };
+}
+
+// 兼容骨架里声明的名字
+function bindZoomInput(control, zoom) {
+  control.sync = () => {
+    control.input.value = Math.round(zoom.scale * 100) + '%';
+  };
+  return control;
+}
+
+// ---- src/pdf/bitmap.js ----
+// 按 devicePixelRatio 渲染页位图并缓存
+// 状态：已实现。渲染需要 DOM canvas；缓存键是纯函数，可单测。
+
+
+
+// 缓存键必须含文档身份，否则换文件后读到上一份的像素。
+function cacheKey(docId, pageNo, scale, dpr) {
+  return docId + ':' + pageNo + ':' + Number(scale).toFixed(4) + ':' + Number(dpr).toFixed(3);
+}
+
+async function renderPage(page, opts = {}) {
+  if (typeof document === 'undefined') {
+    throw figcutError('no-dom', '离开浏览器没法渲染页位图');
+  }
+  const scale = opts.scale === undefined ? 1 : opts.scale;
+  const dpr = opts.dpr === undefined ? 1 : opts.dpr;
+  const viewport = page.getViewport({ scale });
+
+  const canvas = opts.canvas || document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(viewport.width * dpr));
+  canvas.height = Math.max(1, Math.round(viewport.height * dpr));
+
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const transform = dpr === 1 ? null : [dpr, 0, 0, dpr, 0, 0];
+  await page.render({ canvasContext: ctx, viewport, transform }).promise;
+  ctx.restore();
+
+  return canvas;
+}
+
+function clearCache(cache) {
+  if (cache && typeof cache.clear === 'function') cache.clear();
+  return cache;
+}
+
+// ---- src/view/page-stack.js ----
+// 连续/分页滚动 + 单页/双页排版
+// 状态：已实现（依赖浏览器 canvas）。当前页只有一页可编辑，其余页只显示。
+
+
+
+
+
+function createPageStack(opts) {
+  const container = opts.container;
+  const zoom = opts.zoom;
+  if (!container || !container.ownerDocument) throw figcutError('no-dom', '页栈需要 DOM 容器');
+
+  const doc = container.ownerDocument;
+  const root = doc.createElement('div');
+  root.className = 'pages';
+  container.appendChild(root);
+
+  const pages = [];
+  let pdfDoc = null;
+  let current = 1;
+  let token = 0;
+  let busy = Promise.resolve();
+
+  // 视图状态：单/双页、奇偶、连续/分页
+  const view = { dual: false, oddLeft: false, continuous: true };
+
+  async function applyZoom() {
+    if (!pdfDoc) return;
+    const my = ++token;
+    const scale = zoom.scale;
+    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+
+    for (const p of pages) {
+      if (my !== token) return;
+      const vp = p.page.getViewport({ scale });
+      p.canvas.style.width = Math.round(vp.width) + 'px';
+      p.canvas.style.height = Math.round(vp.height) + 'px';
+      p.overlay.style.width = Math.round(vp.width) + 'px';
+      p.overlay.style.height = Math.round(vp.height) + 'px';
+      await renderPage(p.page, { scale, dpr, canvas: p.canvas });
+    }
+  }
+
+  function rowIndexOf(no) {
+    const rows = pageCombos(pages.length, view);
+    for (let i = 0; i < rows.length; i += 1) if (rows[i].includes(no)) return i;
+    return 0;
+  }
+
+  function buildRows() {
+    const rows = pageCombos(pages.length, view);
+    root.textContent = '';
+    rows.forEach((row, i) => {
+      const rowEl = doc.createElement('div');
+      rowEl.className = 'page-row';
+      rowEl.dataset.row = String(i);
+      // 书式：第 1 页单独在右；末页落单时在左
+      if (view.dual && row.length === 1) {
+        rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
+      }
+      for (const no of row) {
+        const p = pages[no - 1];
+        if (p) rowEl.appendChild(p.wrap);
+      }
+      root.appendChild(rowEl);
+    });
+    syncVisibility();
+  }
+
+  function syncVisibility() {
+    const cur = rowIndexOf(current);
+    for (const rowEl of root.children) {
+      const isCur = Number(rowEl.dataset.row) === cur;
+      rowEl.classList.toggle('is-current', isCur);
+      rowEl.style.display = view.continuous || isCur ? '' : 'none';
+    }
+  }
+
+  async function mount(newDoc) {
+    pdfDoc = newDoc;
+    root.textContent = '';
+    pages.length = 0;
+    token += 1;
+
+    for (let no = 1; no <= newDoc.pages; no += 1) {
+      const wrap = doc.createElement('div');
+      wrap.className = 'page';
+      wrap.dataset.page = String(no);
+
+      const canvas = doc.createElement('canvas');
+      const overlay = doc.createElement('div');
+      overlay.className = 'page-overlay';
+
+      wrap.append(canvas, overlay);
+      pages.push({ no, wrap, canvas, overlay, page: null });
+    }
+
+    for (const p of pages) {
+      p.page = await newDoc.pdf.getPage(p.no);
+    }
+
+    buildRows();
+    busy = applyZoom();
+    await busy;
+    setCurrent(current);
+    return pages.length;
+  }
+
+  function setCurrent(no) {
+    current = no;
+    for (const p of pages) p.wrap.classList.toggle('is-current', p.no === no);
+    syncVisibility();
+    const target = pages.find((p) => p.no === no);
+    if (target && target.wrap.scrollIntoView) target.wrap.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    return current;
+  }
+
+  function applyLayout(next) {
+    if (next.dual !== undefined) view.dual = !!next.dual;
+    if (next.oddLeft !== undefined) view.oddLeft = !!next.oddLeft;
+    if (next.continuous !== undefined) view.continuous = !!next.continuous;
+    if (view.dual && view.oddLeft === undefined) view.oddLeft = false;
+    buildRows();
+    return { ...view };
+  }
+
+  function visibleRects() {
+    return pages.map((p) => {
+      const r = p.wrap.getBoundingClientRect();
+      return { no: p.no, top: r.top, height: r.height };
+    });
+  }
+
+  return {
+    root,
+    pages,
+    view,
+    mount,
+    setCurrent,
+    applyLayout,
+    visibleRects,
+    applyZoom: () => {
+      busy = busy.then(applyZoom);
+      return busy;
+    },
+    get current() {
+      return current;
+    },
+  };
+}
+
+function setCurrent(stack, no) {
+  return stack.setCurrent(no);
+}
+
+function visibleRects(stack) {
+  return stack.visibleRects();
+}
+
+// ---- src/core/geometry.js ----
+// 矩形与多边形的纯几何运算
+// 状态：已实现。不碰 DOM、不碰 PDF，输入输出都是普通对象与数组。
+
+
+
+const MIN_REGION_PT = 2;
+
+function normRect(x0, y0, x1, y1) {
+  const x = Math.min(x0, x1);
+  const y = Math.min(y0, y1);
+  return { x, y, w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
+}
+
+// 反着拖出的框也归一化；任一边小于 minSize 视为误触，返回 null。
+function rectFromPoints(x0, y0, x1, y1, minSize = MIN_REGION_PT) {
+  const r = normRect(x0, y0, x1, y1);
+  if (!(r.w >= minSize) || !(r.h >= minSize)) return null;
+  if (!Number.isFinite(r.w) || !Number.isFinite(r.h)) return null;
+  return r;
+}
+
+// 整块塞进页内：先夹尺寸，再夹位置，形状不变。
+function clampRect(rect, pageW, pageH) {
+  const w = clamp(Math.min(rect.w, pageW), 0, pageW);
+  const h = clamp(Math.min(rect.h, pageH), 0, pageH);
+  const x = clamp(rect.x, 0, pageW - w);
+  const y = clamp(rect.y, 0, pageH - h);
+  return { x, y, w, h };
+}
+
+function expandRect(rect, dx, dy) {
+  return { x: rect.x - dx, y: rect.y - dy, w: rect.w + dx * 2, h: rect.h + dy * 2 };
+}
+
+function polyBounds(points) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+// 整体平移：按外接框夹边，形状一点不变。
+function movePoly(points, dx, dy, pageW, pageH) {
+  const b = polyBounds(points);
+  let mx = dx;
+  let my = dy;
+  if (b.x + mx < 0) mx = -b.x;
+  if (b.x + b.w + mx > pageW) mx = pageW - (b.x + b.w);
+  if (b.y + my < 0) my = -b.y;
+  if (b.y + b.h + my > pageH) my = pageH - (b.y + b.h);
+  if (mx !== dx || my !== dy) {
+    const nb = { x: b.x + mx, y: b.y + my, w: b.w, h: b.h };
+    if (nb.x < 0 || nb.y < 0 || nb.x + nb.w > pageW || nb.y + nb.h > pageH) {
+      return points.map((p) => ({ x: p.x, y: p.y }));
+    }
+  }
+  return points.map((p) => ({ x: p.x + mx, y: p.y + my }));
+}
+
+function hitTestRect(rect, x, y, tol = 0) {
+  return (
+    x >= rect.x - tol &&
+    x <= rect.x + rect.w + tol &&
+    y >= rect.y - tol &&
+    y <= rect.y + rect.h + tol
+  );
+}
+
+function distanceToSegment(px, py, ax, ay, bx, by) {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 === 0 ? 0 : clamp(((px - ax) * vx + (py - ay) * vy) / len2, 0, 1);
+  const cx = ax + t * vx;
+  const cy = ay + t * vy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+function hitTestPoly(points, x, y, tol = 0) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const a = points[i];
+    const b = points[j];
+    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  if (inside) return true;
+  if (tol <= 0) return false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const a = points[j];
+    const b = points[i];
+    if (distanceToSegment(x, y, a.x, a.y, b.x, b.y) <= tol) return true;
+  }
+  return false;
+}
+
+const CORNERS = [
+  ['nw', 0, 0],
+  ['ne', 1, 0],
+  ['sw', 0, 1],
+  ['se', 1, 1],
+];
+
+function cornerAt(rect, x, y, tol = 8) {
+  for (const [name, fx, fy] of CORNERS) {
+    const cx = rect.x + rect.w * fx;
+    const cy = rect.y + rect.h * fy;
+    if (Math.abs(x - cx) <= tol && Math.abs(y - cy) <= tol) return name;
+  }
+  return null;
+}
+
+// ---- src/view/editor.js ----
+// 框的增删改与工具模式
+// 状态：已实现（纯逻辑：坐标一律 pt，不碰 DOM，可在 node 单测）。
+// 已拍板：蓝框停在手画位置，不做任何吸附；白界只由导出框负责。
+
+
+
+const TOOLS = ['select', 'rect', 'poly'];
+
+function createEditor(opts = {}) {
+  return {
+    tool: opts.tool || 'rect',
+    page: opts.page || 1,
+    pageW: opts.pageW || 595,
+    pageH: opts.pageH || 842,
+    regions: [],
+    selectedId: null,
+    draft: null,
+    drag: null,
+    nextId: 1,
+  };
+}
+
+function setTool(ed, tool) {
+  if (!TOOLS.includes(tool)) throw new Error('未知工具: ' + tool);
+  ed.tool = tool;
+  ed.draft = null;
+  ed.drag = null;
+  return tool;
+}
+
+function setPage(ed, page) {
+  ed.page = page;
+  ed.selectedId = null;
+  ed.draft = null;
+  ed.drag = null;
+}
+
+function boundsOf(region) {
+  return region.shape === 'poly' ? polyBounds(region.points) : region.rect;
+}
+
+function regionAt(ed, pt) {
+  for (let i = ed.regions.length - 1; i >= 0; i -= 1) {
+    const r = ed.regions[i];
+    if (r.page !== ed.page) continue;
+    const hit = r.shape === 'poly' ? hitTestPoly(r.points, pt.x, pt.y, 2) : hitTestRect(r.rect, pt.x, pt.y, 2);
+    if (hit) return r;
+  }
+  return null;
+}
+
+function selected(ed) {
+  return ed.regions.find((r) => r.id === ed.selectedId) || null;
+}
+
+function addRegion(ed, region) {
+  const r = { id: ed.nextId++, kind: 'stem', opt: null, q: '', note: '', page: ed.page, ...region };
+  ed.regions.push(r);
+  ed.selectedId = r.id;
+  return r;
+}
+
+function deleteSelection(ed) {
+  if (ed.selectedId === null) return null;
+  const idx = ed.regions.findIndex((r) => r.id === ed.selectedId);
+  if (idx < 0) return null;
+  const [gone] = ed.regions.splice(idx, 1);
+  ed.selectedId = null;
+  return gone;
+}
+
+// 方向键微移：Shift 1pt / Alt 10pt 由调用方换算好再传进来。
+function nudge(ed, dx, dy) {
+  const r = selected(ed);
+  if (!r) return null;
+  if (r.shape === 'poly') {
+    r.points = movePoly(r.points, dx, dy, ed.pageW, ed.pageH);
+  } else {
+    r.rect = clampRect({ x: r.rect.x + dx, y: r.rect.y + dy, w: r.rect.w, h: r.rect.h }, ed.pageW, ed.pageH);
+  }
+  return r;
+}
+
+function pointerDown(ed, pt) {
+  if (ed.tool === 'rect') {
+    ed.draft = { shape: 'rect', x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+    return { draft: true };
+  }
+
+  if (ed.tool === 'poly') {
+    if (!ed.draft || ed.draft.shape !== 'poly') ed.draft = { shape: 'poly', points: [{ x: pt.x, y: pt.y }] };
+    else ed.draft.points.push({ x: pt.x, y: pt.y });
+    return { draft: true, points: ed.draft.points.length };
+  }
+
+  const hit = regionAt(ed, pt);
+  ed.selectedId = hit ? hit.id : null;
+  if (!hit) return { selection: null };
+
+  const box = boundsOf(hit);
+  const corner = hit.shape === 'rect' ? cornerAt(box, pt.x, pt.y, 8) : null;
+  ed.drag = {
+    mode: corner ? 'resize' : 'move',
+    corner,
+    start: { x: pt.x, y: pt.y },
+    origin: hit.shape === 'poly' ? hit.points.map((p) => ({ ...p })) : { ...hit.rect },
+    target: hit,
+  };
+  return { selection: hit.id, mode: ed.drag.mode };
+}
+
+function pointerMove(ed, pt) {
+  if (ed.draft && ed.draft.shape === 'rect') {
+    ed.draft.x1 = pt.x;
+    ed.draft.y1 = pt.y;
+    return { draft: true };
+  }
+
+  if (!ed.drag) return null;
+  const t = ed.drag.target;
+  const dx = pt.x - ed.drag.start.x;
+  const dy = pt.y - ed.drag.start.y;
+
+  if (ed.drag.mode === 'move') {
+    if (t.shape === 'poly') {
+      const moved = movePoly(ed.drag.origin, dx, dy, ed.pageW, ed.pageH);
+      t.points = moved;
+    } else {
+      t.rect = clampRect({ x: ed.drag.origin.x + dx, y: ed.drag.origin.y + dy, w: ed.drag.origin.w, h: ed.drag.origin.h }, ed.pageW, ed.pageH);
+    }
+    return { moved: true };
+  }
+
+  const o = ed.drag.origin;
+  let left = o.x;
+  let top = o.y;
+  let right = o.x + o.w;
+  let bottom = o.y + o.h;
+  const corner = ed.drag.corner;
+  if (corner.includes('w')) left = Math.min(pt.x, right - 2);
+  if (corner.includes('e')) right = Math.max(pt.x, left + 2);
+  if (corner.includes('n')) top = Math.min(pt.y, bottom - 2);
+  if (corner.includes('s')) bottom = Math.max(pt.y, top + 2);
+  t.rect = clampRect({ x: left, y: top, w: right - left, h: bottom - top }, ed.pageW, ed.pageH);
+  return { resized: true };
+}
+
+function pointerUp(ed, pt) {
+  if (ed.draft && ed.draft.shape === 'rect') {
+    const r = rectFromPoints(ed.draft.x0, ed.draft.y0, ed.draft.x1, ed.draft.y1);
+    ed.draft = null;
+    if (!r) return null;
+    return addRegion(ed, { shape: 'rect', rect: clampRect(r, ed.pageW, ed.pageH) });
+  }
+
+  if (ed.draft && ed.draft.shape === 'poly') {
+    // 只有"点回首点"才闭合；否则继续加点（Enter 走 closePoly）
+    const first = ed.draft.points[0];
+    const nearFirst = Math.hypot(pt.x - first.x, pt.y - first.y) <= 8;
+    if (nearFirst && ed.draft.points.length >= 4) {
+      ed.draft.points.pop();
+      return closePoly(ed);
+    }
+    return null;
+  }
+
+  if (ed.drag) {
+    ed.drag = null;
+    return { committed: true };
+  }
+  return null;
+}
+
+function closePoly(ed) {
+  if (!ed.draft || ed.draft.shape !== 'poly') return null;
+  if (ed.draft.points.length < 3) {
+    ed.draft = null;
+    return null;
+  }
+  const points = ed.draft.points.map((p) => ({ x: p.x, y: p.y }));
+  ed.draft = null;
+  return addRegion(ed, { shape: 'poly', points });
+}
+
+// ---- src/view/overlay.js ----
+// 每页选框覆盖层：SVG 画框，editor 负责逻辑，这里只画。
+// 状态：已实现。
+
+
+
+const NS = 'http://www.w3.org/2000/svg';
+
+function createOverlay(pageEl, size) {
+  const doc = pageEl.ownerDocument;
+  const host = pageEl.querySelector('.page-overlay');
+  const svg = doc.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'regions');
+  svg.setAttribute('viewBox', '0 0 ' + size.w + ' ' + size.h);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  host.appendChild(svg);
+  return { svg, size };
+}
+
+function put(parent, node) {
+  parent.appendChild(node);
+  return node;
+}
+
+// 手柄按屏幕像素算大小：pt 尺寸 = 像素 / 当前倍率，缩放到多大都一个手感。
+function addHandle(doc, parent, x, y, size, cls) {
+  const h = doc.createElementNS(NS, 'rect');
+  h.setAttribute('x', x - size / 2);
+  h.setAttribute('y', y - size / 2);
+  h.setAttribute('width', size);
+  h.setAttribute('height', size);
+  h.setAttribute('class', 'handle ' + cls);
+  parent.appendChild(h);
+  return h;
+}
+
+function addHandles(doc, parent, sel, scale) {
+  const size = 8 / Math.max(0.05, scale);
+  if (sel.shape === 'poly') {
+    for (const p of sel.points) addHandle(doc, parent, p.x, p.y, size * 0.8, 'is-poly');
+    return;
+  }
+  const r = sel.rect;
+  addHandle(doc, parent, r.x, r.y, size, 'is-nw');
+  addHandle(doc, parent, r.x + r.w, r.y, size, 'is-ne');
+  addHandle(doc, parent, r.x, r.y + r.h, size, 'is-sw');
+  addHandle(doc, parent, r.x + r.w, r.y + r.h, size, 'is-se');
+}
+
+function drawRegions(overlay, regions, opts = {}) {
+  const doc = overlay.svg.ownerDocument;
+  while (overlay.svg.firstChild) overlay.svg.removeChild(overlay.svg.firstChild);
+
+  for (const r of regions) {
+    const cls = 'region' + (r.id === opts.selectedId ? ' is-selected' : '');
+    if (r.shape === 'poly') {
+      const poly = doc.createElementNS(NS, 'polygon');
+      poly.setAttribute('points', r.points.map((p) => p.x + ',' + p.y).join(' '));
+      poly.setAttribute('class', cls);
+      put(overlay.svg, poly);
+    } else {
+      const rect = doc.createElementNS(NS, 'rect');
+      rect.setAttribute('x', r.rect.x);
+      rect.setAttribute('y', r.rect.y);
+      rect.setAttribute('width', r.rect.w);
+      rect.setAttribute('height', r.rect.h);
+      rect.setAttribute('class', cls);
+      put(overlay.svg, rect);
+    }
+  }
+
+  // 选中态画手柄，能拖哪儿一眼看得出
+  if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
+
+  const draft = opts.draft;
+  if (draft && draft.shape === 'rect') {
+    const x = Math.min(draft.x0, draft.x1);
+    const y = Math.min(draft.y0, draft.y1);
+    const rect = doc.createElementNS(NS, 'rect');
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', y);
+    rect.setAttribute('width', Math.abs(draft.x1 - draft.x0));
+    rect.setAttribute('height', Math.abs(draft.y1 - draft.y0));
+    rect.setAttribute('class', 'region is-draft');
+    put(overlay.svg, rect);
+  } else if (draft && draft.shape === 'poly' && draft.points.length > 1) {
+    const line = doc.createElementNS(NS, 'polyline');
+    line.setAttribute('points', draft.points.map((p) => p.x + ',' + p.y).join(' '));
+    line.setAttribute('class', 'region is-draft');
+    put(overlay.svg, line);
+  }
+}
+
+// 命中测试交给 editor；这里只把当前页的框挑出来画。
+function regionsOfPage(regions, page) {
+  return regions.filter((r) => r.page === page);
+}
+
+function hitTest(ed, pt, regionAtFn) {
+  return regionAtFn(ed, pt);
+}
+
+// ---- src/ui/preview.js ----
+// 右栏常驻预览：整页 + 所有框；选中时画导出裁切
+// 状态：已实现（canvas 2D）。
+
+function createPreview(host) {
+  const doc = host.ownerDocument;
+  const canvas = doc.createElement('canvas');
+  canvas.className = 'preview-canvas';
+  host.textContent = '';
+  host.appendChild(canvas);
+  return { canvas, host };
+}
+
+function renderPreview(preview, opts) {
+  const canvas = preview.canvas;
+  const ctx = canvas.getContext('2d');
+  const { source, regions, selectedId, pageW, pageH, crop } = opts;
+
+  if (crop) {
+    const w = Math.min(240, Math.max(80, Math.round(crop.w * 2)));
+    const h = Math.max(1, Math.round((crop.h / crop.w) * w));
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    if (source) {
+      const sx = (crop.x / pageW) * source.width;
+      const sy = (crop.y / pageH) * source.height;
+      const sw = (crop.w / pageW) * source.width;
+      const sh = (crop.h / pageH) * source.height;
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, w, h);
+    }
+    return { mode: 'crop', w, h };
+  }
+
+  const w = Math.min(240, Math.max(120, Math.round(pageW / 3)));
+  const h = Math.max(1, Math.round((pageH / pageW) * w));
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  if (source) ctx.drawImage(source, 0, 0, w, h);
+
+  const sx = w / pageW;
+  const sy = h / pageH;
+  ctx.lineWidth = 1;
+  for (const r of regions) {
+    ctx.strokeStyle = r.id === selectedId ? '#ff8c00' : '#1c6ef2';
+    if (r.shape === 'poly') {
+      ctx.beginPath();
+      r.points.forEach((p, i) => {
+        const x = p.x * sx;
+        const y = p.y * sy;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(r.rect.x * sx, r.rect.y * sy, r.rect.w * sx, r.rect.h * sy);
+    }
+  }
+  return { mode: 'page', w, h };
+}
+
+function drawCrop(preview, opts) {
+  return renderPreview(preview, opts);
+}
+
+// ---- src/ui/inspector.js ----
+// 选中区域的就地控件：类型（题干/A-D）、题号、备注
+// 状态：已实现。setter 是纯函数，DOM 只负责把它们接上。
+
+const KINDS = ['stem', 'A', 'B', 'C', 'D'];
+
+function setKind(region, kind) {
+  if (kind === 'stem') {
+    region.kind = 'stem';
+    region.opt = null;
+  } else if (KINDS.includes(kind)) {
+    region.kind = 'opt';
+    region.opt = kind;
+  }
+  return region;
+}
+
+function setQuestion(region, q) {
+  region.q = String(q === undefined || q === null ? '' : q).trim();
+  return region;
+}
+
+function setNote(region, note) {
+  region.note = String(note || '');
+  return region;
+}
+
+function kindValue(region) {
+  return region.kind === 'opt' ? region.opt || 'A' : 'stem';
+}
+
+function buildControls(doc, region, onChange) {
+  const row = doc.createElement('div');
+  row.className = 'inspector';
+
+  const kind = doc.createElement('select');
+  kind.className = 'region-kind';
+  kind.title = '类型';
+  for (const k of KINDS) {
+    const o = doc.createElement('option');
+    o.value = k;
+    o.textContent = k === 'stem' ? '题干' : k;
+    kind.appendChild(o);
+  }
+  kind.value = kindValue(region);
+
+  const q = doc.createElement('input');
+  q.className = 'region-q';
+  q.type = 'text';
+  q.placeholder = '题号';
+  q.value = region.q || '';
+  q.title = '题号';
+
+  const note = doc.createElement('input');
+  note.className = 'region-note';
+  note.type = 'text';
+  note.placeholder = '备注';
+  note.value = region.note || '';
+  note.title = '备注';
+
+  kind.addEventListener('change', () => {
+    setKind(region, kind.value);
+    onChange(region);
+  });
+  q.addEventListener('input', () => {
+    setQuestion(region, q.value);
+    onChange(region, { quiet: true });
+  });
+  note.addEventListener('input', () => {
+    setNote(region, note.value);
+    onChange(region, { quiet: true });
+  });
+
+  row.append(kind, q, note);
+  return row;
+}
+
+// 给一个容器就地渲染控件（骨架里声明的名字）
+function renderInspector(container, region, onChange) {
+  const row = buildControls(container.ownerDocument, region, onChange);
+  container.textContent = '';
+  container.appendChild(row);
+  return row;
+}
+
+// ---- src/ui/region-list.js ----
+// 右栏区域列表：本页可编辑，其他页只读分组
+// 状态：已实现。
+
+
+
+
+// 按页分组给列表用；真正的分组逻辑在 io/config（存盘也要用同一份）
+function groupRowsByPage(regions) {
+  const map = new Map();
+  for (const r of regions) {
+    if (!map.has(r.page)) map.set(r.page, []);
+    map.get(r.page).push(r);
+  }
+  return [...map.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+function labelOf(region) {
+  const kind = region.kind === 'opt' ? '选项 ' + (region.opt || 'A') : '题干';
+  const q = region.q ? ' · 第 ' + region.q + ' 题' : '';
+  return kind + q;
+}
+
+function renderRegions(host, opts) {
+  const doc = host.ownerDocument;
+  const { regions, page, selectedId, onSelect, onChange, onDelete } = opts;
+  host.textContent = '';
+
+  const groups = groupRowsByPage(regions);
+  if (groups.length === 0) {
+    const empty = doc.createElement('div');
+    empty.className = 'region-empty';
+    empty.textContent = '还没有框。用左上角的矩形/多边形圈一张图。';
+    host.appendChild(empty);
+    return 0;
+  }
+
+  let rows = 0;
+  for (const [pageNo, list] of groups) {
+    const head = doc.createElement('div');
+    head.className = 'region-group' + (pageNo === page ? ' is-current' : '');
+    head.textContent = '第 ' + pageNo + ' 页 · ' + list.length + ' 个';
+    host.appendChild(head);
+
+    for (const r of list) {
+      const row = doc.createElement('div');
+      row.className = 'region-row' + (r.id === selectedId ? ' is-selected' : '');
+      row.dataset.id = String(r.id);
+      row.addEventListener('click', (ev) => {
+        if (ev.target && ev.target.tagName === 'SELECT') return;
+        onSelect(r);
+      });
+
+      if (pageNo === page) {
+        row.appendChild(buildControls(doc, r, (region, meta) => onChange(region, meta)));
+      } else {
+        const label = doc.createElement('div');
+        label.className = 'region-label';
+        label.textContent = labelOf(r);
+        row.appendChild(label);
+      }
+
+      const del = doc.createElement('button');
+      del.type = 'button';
+      del.className = 'region-del';
+      del.innerHTML = ICONS.trash;
+      del.title = '删除';
+      del.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        onDelete(r);
+      });
+      row.appendChild(del);
+
+      host.appendChild(row);
+      rows += 1;
+    }
+  }
+  return rows;
+}
+
+// ---- src/ui/page-list.js ----
+// 左栏页面列表：页码 + 每页标注数，当前页高亮并自动滚入视野
+// 状态：已实现。
+
+function countByPage(regions) {
+  const counts = {};
+  for (const r of regions) counts[r.page] = (counts[r.page] || 0) + 1;
+  return counts;
+}
+
+function renderPageList(host, opts) {
+  const doc = host.ownerDocument;
+  const { pages, current, regions, onPick } = opts;
+  const counts = countByPage(regions || []);
+  host.textContent = '';
+
+  const list = doc.createElement('div');
+  list.className = 'page-list';
+
+  for (const p of pages) {
+    const row = doc.createElement('button');
+    row.type = 'button';
+    row.className = 'page-item' + (p.no === current ? ' is-current' : '');
+    row.dataset.page = String(p.no);
+
+    const num = doc.createElement('span');
+    num.className = 'page-no';
+    num.textContent = String(p.no);
+
+    const badge = doc.createElement('span');
+    badge.className = 'page-count';
+    badge.textContent = counts[p.no] ? String(counts[p.no]) : '';
+
+    row.append(num, badge);
+    row.addEventListener('click', () => onPick && onPick(p.no));
+    list.appendChild(row);
+  }
+
+  host.appendChild(list);
+  return list;
+}
+
+function markCurrent(host, no) {
+  for (const row of host.querySelectorAll('.page-item')) {
+    row.classList.toggle('is-current', Number(row.dataset.page) === no);
+  }
+  const cur = host.querySelector('.page-item.is-current');
+  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+  return no;
+}
+
+// ---- src/core/history.js ----
+// 撤销重做栈与微移合并
+// 状态：已实现。存的是"整份快照"，合并窗口内同 key 的动作只留一条。
+
+const COALESCE_MS = 600;
+
+function createHistory(initial, opts = {}) {
+  return {
+    present: initial === undefined ? null : initial,
+    past: [],
+    future: [],
+    limit: opts.limit === undefined ? 200 : opts.limit,
+    windowMs: opts.windowMs === undefined ? COALESCE_MS : opts.windowMs,
+    now: opts.now || (() => Date.now()),
+    lastKey: null,
+    lastTime: 0,
+  };
+}
+
+function current(h) {
+  return h.present;
+}
+
+// key 相同且落在合并窗口内 → 只更新 present，不再压一条历史。
+function commit(h, next, opts = {}) {
+  const key = opts.key === undefined ? null : opts.key;
+  const t = h.now();
+  const merge = key !== null && key === h.lastKey && t - h.lastTime <= h.windowMs && h.past.length > 0;
+
+  if (!merge) {
+    h.past.push(h.present);
+    if (h.past.length > h.limit) h.past.shift();
+  }
+  h.present = next;
+  h.lastKey = key;
+  h.lastTime = t;
+  h.future.length = 0;
+  return next;
+}
+
+function undo(h) {
+  if (h.past.length === 0) return null;
+  h.future.push(h.present);
+  h.present = h.past.pop();
+  h.lastKey = null;
+  return h.present;
+}
+
+function redo(h) {
+  if (h.future.length === 0) return null;
+  h.past.push(h.present);
+  h.present = h.future.pop();
+  h.lastKey = null;
+  return h.present;
+}
+
+function canUndo(h) {
+  return h.past.length > 0;
+}
+
+function canRedo(h) {
+  return h.future.length > 0;
+}
+
+// ---- src/pdf/document.js ----
+// 打开 PDF、页数、页尺寸
+// 状态：已实现。pdf.js 由 index.html 以 classic script 外部引入，本模块只包一层。
+
+
+
+async function openDocument(source, opts = {}) {
+  const lib = opts.lib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+  if (!lib) throw figcutError('no-pdfjs', 'pdf.js 没加载（vendor/pdfjs/pdf.min.js）');
+
+  if (opts.workerSrc) lib.GlobalWorkerOptions.workerSrc = opts.workerSrc;
+
+  const task = lib.getDocument(source);
+  const pdf = await task.promise;
+  return {
+    pdf,
+    id: opts.id || 'doc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+    pages: pdf.numPages,
+  };
+}
+
+function pageCount(doc) {
+  return doc.pages;
+}
+
+async function pageSize(doc, pageNo) {
+  const page = await doc.pdf.getPage(pageNo);
+  const vp = page.getViewport({ scale: 1 });
+  return { w: vp.width, h: vp.height, rotation: vp.rotation };
+}
+
+// ---- src/app/open.js ----
+// 打开文件与拖放
+// 状态：已实现。
+
+
+
+
+const WORKER_SRC = 'vendor/pdfjs/pdf.worker.min.js';
+
+async function openFile(file, opts = {}) {
+  if (!file) throw figcutError('no-file', '没有文件');
+  const buffer = await file.arrayBuffer();
+  return openDocument(
+    { data: new Uint8Array(buffer) },
+    { workerSrc: opts.workerSrc || WORKER_SRC, id: file.name + '|' + file.size }
+  );
+}
+
+// 拖放：只认第一个 PDF，一次只处理一个文件。
+function acceptDrop(element, onFile) {
+  const stop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const over = (e) => {
+    stop(e);
+    element.classList.add('is-dragover');
+  };
+  const leave = (e) => {
+    stop(e);
+    element.classList.remove('is-dragover');
+  };
+  const drop = (e) => {
+    stop(e);
+    element.classList.remove('is-dragover');
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) onFile(file);
+  };
+  element.addEventListener('dragenter', over);
+  element.addEventListener('dragover', over);
+  element.addEventListener('dragleave', leave);
+  element.addEventListener('drop', drop);
+  return () => {
+    element.removeEventListener('dragenter', over);
+    element.removeEventListener('dragover', over);
+    element.removeEventListener('dragleave', leave);
+    element.removeEventListener('drop', drop);
+  };
+}
+
+// 系统文件选择框
+function pickFile() {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') return resolve(null);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,.pdf';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.remove();
+      resolve(file || null);
+    });
+    input.click();
+  });
+}
+
+// ---- src/pdf/ink.js ----
+// 墨迹掩膜与笔画连通域
+// 状态：已实现。掩膜吃的是 RGBA 像素数组，因此不依赖 canvas，node 里能测。
+
+const INK_THRESHOLD = 250;
+
+// 任一通道低于阈值就算墨迹；半透明像素按 alpha 折算。
+function pixelInk(r, g, b, a, threshold) {
+  if (a < 8) return 0;
+  return r < threshold || g < threshold || b < threshold ? 1 : 0;
+}
+
+function buildInkMask(image, opts = {}) {
+  const data = image.data;
+  const width = image.width;
+  const height = image.height;
+  const threshold = opts.threshold === undefined ? INK_THRESHOLD : opts.threshold;
+  const pxPerPt = opts.pxPerPt === undefined ? 1 : opts.pxPerPt;
+
+  const out = new Uint8Array(width * height);
+  for (let i = 0, p = 0; i < out.length; i += 1, p += 4) {
+    out[i] = pixelInk(data[p], data[p + 1], data[p + 2], data[p + 3], threshold);
+  }
+  return { w: width, h: height, pxPerPt, data: out };
+}
+
+// 4 连通分量，返回整根笔画的包围盒与像素数。
+function components(mask) {
+  const seen = new Uint8Array(mask.w * mask.h);
+  const out = [];
+
+  for (let start = 0; start < mask.data.length; start += 1) {
+    if (seen[start] || mask.data[start] === 0) continue;
+    const stack = [start];
+    seen[start] = 1;
+    let minX = mask.w;
+    let minY = mask.h;
+    let maxX = -1;
+    let maxY = -1;
+    let total = 0;
+
+    while (stack.length > 0) {
+      const i = stack.pop();
+      const y = Math.floor(i / mask.w);
+      const x = i - y * mask.w;
+      total += 1;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+
+      if (x > 0) {
+        const n = i - 1;
+        if (!seen[n] && mask.data[n] !== 0) { seen[n] = 1; stack.push(n); }
+      }
+      if (x + 1 < mask.w) {
+        const n = i + 1;
+        if (!seen[n] && mask.data[n] !== 0) { seen[n] = 1; stack.push(n); }
+      }
+      if (y > 0) {
+        const n = i - mask.w;
+        if (!seen[n] && mask.data[n] !== 0) { seen[n] = 1; stack.push(n); }
+      }
+      if (y + 1 < mask.h) {
+        const n = i + mask.w;
+        if (!seen[n] && mask.data[n] !== 0) { seen[n] = 1; stack.push(n); }
+      }
+    }
+
+    out.push({ minX, minY, maxX, maxY, total });
+  }
+  return out;
+}
+
+// 命中某个像素时返回它所在的那根笔画，否则 null。
+function strokeAt(mask, x, y) {
+  if (x < 0 || y < 0 || x >= mask.w || y >= mask.h) return null;
+  if (mask.data[y * mask.w + x] === 0) return null;
+
+  const seen = new Uint8Array(mask.w * mask.h);
+  const stack = [y * mask.w + x];
+  seen[stack[0]] = 1;
+  let minX = x;
+  let minY = y;
+  let maxX = x;
+  let maxY = y;
+  let total = 0;
+
+  while (stack.length > 0) {
+    const i = stack.pop();
+    const py = Math.floor(i / mask.w);
+    const px = i - py * mask.w;
+    total += 1;
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
+    const nbrs = [px > 0 ? i - 1 : -1, px + 1 < mask.w ? i + 1 : -1, py > 0 ? i - mask.w : -1, py + 1 < mask.h ? i + mask.w : -1];
+    for (const n of nbrs) {
+      if (n >= 0 && !seen[n] && mask.data[n] !== 0) { seen[n] = 1; stack.push(n); }
+    }
+  }
+
+  return { minX, minY, maxX, maxY, total };
+}
+
+// ---- src/core/whitemargin.js ----
+/* 导出框 = 手画选区（钢笔或矩形）**填充成矩形**后，取该矩形内非白像素的最小外接框，
+   再每边加边距。这是需求里写死的链路：
+     钢笔框选 → 填充为矩形 → 收缩背景至非白色像素 → 扩展 margin
+   三条硬约束：
+     - 多边形只用来定"看哪一块"，导出永远是一个完整的矩形图，不做多边形蒙版
+       （蒙版会把跨边的墨迹切掉，图就不完整了）。
+     - 不做纯白吸附：外接框本身就是紧的；纯白四边由 margin 提供。
+     - 不猜笔画归属：框里有什么非白像素就算什么，框要人画准。
+   坐标：进来 pt，内部 px，出去 pt。 */
+
+const INK_T = 246;   // 任一通道低于它就算非白
+const MIN_ALPHA = 8;
+
+function rectToPoly(rect) {
+  return [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.w, y: rect.y },
+    { x: rect.x + rect.w, y: rect.y + rect.h },
+    { x: rect.x, y: rect.y + rect.h },
+  ];
+}
+
+// 多边形在第 yc 行命中的 x 区间（偶奇规则）
+function spansAt(poly, s, yc) {
+  const xs = [];
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i, i += 1) {
+    const yi = poly[i].y * s;
+    const yj = poly[j].y * s;
+    if (yi > yc === yj > yc) continue;
+    const xi = poly[i].x * s;
+    const xj = poly[j].x * s;
+    xs.push(xi + ((yc - yi) * (xj - xi)) / (yj - yi));
+  }
+  xs.sort((a, b) => a - b);
+  const out = [];
+  for (let k = 0; k + 1 < xs.length; k += 2) out.push([xs[k], xs[k + 1]]);
+  return out;
+}
+
+// 8 连通标注（只标墨迹，不区分文字）
+function labelInk(mask, minArea = 4) {
+  const { w, h, data } = mask;
+  const lab = new Int32Array(w * h);
+  const stack = new Int32Array(w * h);
+  const comps = [];
+  let id = 0;
+
+  for (let p = 0; p < lab.length; p += 1) {
+    if (lab[p] || !data[p]) continue;
+    id += 1;
+    let sp = 0;
+    stack[sp++] = p;
+    lab[p] = id;
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    let total = 0;
+
+    while (sp) {
+      const q = stack[--sp];
+      const x = q % w;
+      const y = (q / w) | 0;
+      total += 1;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (!dx && !dy) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const nq = ny * w + nx;
+          if (!lab[nq] && data[nq]) {
+            lab[nq] = id;
+            stack[sp++] = nq;
+          }
+        }
+      }
+    }
+
+    if (total >= minArea) comps.push({ id, minX, minY, maxX, maxY, total });
+  }
+  return comps;
+}
+
+// 与选区相交的笔画整根纳入（跨出框的线不会被切断），返回并集外接框
+function contentBounds(mask, rect) {
+  const s = mask.pxPerPt;
+  const x0 = Math.max(0, Math.floor(rect.x * s));
+  const y0 = Math.max(0, Math.floor(rect.y * s));
+  const x1 = Math.min(mask.w - 1, Math.ceil((rect.x + rect.w) * s) - 1);
+  const y1 = Math.min(mask.h - 1, Math.ceil((rect.y + rect.h) * s) - 1);
+  if (x1 < x0 || y1 < y0) return null;
+
+  const comps = labelInk(mask);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let hit = 0;
+
+  for (const c of comps) {
+    if (c.maxX < x0 || c.minX > x1 || c.maxY < y0 || c.minY > y1) continue;
+    // 只在框边擦过 1px 的碎屑不算（避免页眉横线把整页拉进来）
+    const ox = Math.min(c.maxX, x1) - Math.max(c.minX, x0) + 1;
+    const oy = Math.min(c.maxY, y1) - Math.max(c.minY, y0) + 1;
+    if (ox * oy < 2) continue;
+    hit += 1;
+    if (c.minX < minX) minX = c.minX;
+    if (c.minY < minY) minY = c.minY;
+    if (c.maxX > maxX) maxX = c.maxX;
+    if (c.maxY > maxY) maxY = c.maxY;
+  }
+
+  if (hit === 0) return null;
+  return { minX, minY, maxX, maxY };
+}
+
+// 掩膜内非白像素的最小外接框（px）。掩膜没有则返回 null。
+function inkBounds(mask, shape) {
+  const poly = Array.isArray(shape) ? shape : rectToPoly(shape);
+  if (poly.length < 3) return null;
+  const s = mask.pxPerPt;
+  const { w, h, data } = mask;
+
+  let top = Infinity;
+  let bot = -Infinity;
+  for (const p of poly) {
+    if (p.y < top) top = p.y;
+    if (p.y > bot) bot = p.y;
+  }
+  const y0 = Math.max(0, Math.floor(top * s));
+  const y1 = Math.min(h - 1, Math.ceil(bot * s));
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (let py = y0; py <= y1; py += 1) {
+    const spans = spansAt(poly, s, py + 0.5);
+    if (spans.length === 0) continue;
+    const base = py * w;
+    let rowHit = false;
+    for (const [xa, xb] of spans) {
+      const a = Math.max(0, Math.ceil(xa));
+      const b = Math.min(w - 1, Math.floor(xb - 0.001));
+      for (let px = a; px <= b; px += 1) {
+        if (!data[base + px]) continue;
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        rowHit = true;
+      }
+    }
+    if (rowHit) {
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+    }
+  }
+
+  if (!Number.isFinite(minX)) return null;
+  return { minX, minY, maxX, maxY };
+}
+
+// 导出框（pt）：框内非白像素的外接矩形；框里全白返回 null。
+// 选区 → 外接矩形（"填充为矩形"这一步）
+function fillToRect(shape) {
+  const poly = Array.isArray(shape) ? shape : rectToPoly(shape);
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const p of poly) {
+    if (p.x < x0) x0 = p.x;
+    if (p.y < y0) y0 = p.y;
+    if (p.x > x1) x1 = p.x;
+    if (p.y > y1) y1 = p.y;
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+function computeExportBox(mask, shape) {
+  // 先填成矩形，再把与矩形相交的笔画整根纳入：跨边的线不会被切断
+  const rect = fillToRect(shape);
+  const b = contentBounds(mask, rect) || inkBounds(mask, rect);
+  if (!b) return null;
+  const s = mask.pxPerPt;
+  return {
+    x: b.minX / s,
+    y: b.minY / s,
+    w: (b.maxX - b.minX + 1) / s,
+    h: (b.maxY - b.minY + 1) / s,
+  };
+}
+
+// 每边加边距，夹在页内
+function withMargin(box, margin, pageW, pageH) {
+  const m = margin > 0 ? margin : 0;
+  const x0 = Math.max(0, box.x - m);
+  const y0 = Math.max(0, box.y - m);
+  const x1 = Math.min(pageW, box.x + box.w + m);
+  const y1 = Math.min(pageH, box.y + box.h + m);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// 对齐到导出像素网格：向内取整，不重采样
+function cropRect(box, pageW, pageH, scale) {
+  const pxW = Math.max(1, Math.round(pageW * scale));
+  const pxH = Math.max(1, Math.round(pageH * scale));
+  const clampPx = (v, hi) => Math.min(hi, Math.max(0, v));
+
+  const x0 = clampPx(Math.ceil(box.x * scale - 1e-6), pxW - 1);
+  const y0 = clampPx(Math.ceil(box.y * scale - 1e-6), pxH - 1);
+  const x1 = clampPx(Math.max(Math.floor((box.x + box.w) * scale + 1e-6), x0 + 1), pxW);
+  const y1 = clampPx(Math.max(Math.floor((box.y + box.h) * scale + 1e-6), y0 + 1), pxH);
+
+  return { px: [x0, y0, x1, y1], x: x0 / scale, y: y0 / scale, w: (x1 - x0) / scale, h: (y1 - y0) / scale };
+}
+
+function isWhiteRow(mask, y, x0 = 0, x1 = mask.w) {
+  if (y < 0 || y >= mask.h) return true;
+  const a = Math.max(0, Math.floor(x0));
+  const b = Math.min(mask.w, Math.ceil(x1));
+  for (let x = a; x < b; x += 1) if (mask.data[y * mask.w + x] !== 0) return false;
+  return true;
+}
+
+function isWhiteCol(mask, x, y0 = 0, y1 = mask.h) {
+  if (x < 0 || x >= mask.w) return true;
+  const a = Math.max(0, Math.floor(y0));
+  const b = Math.min(mask.h, Math.ceil(y1));
+  for (let y = a; y < b; y += 1) if (mask.data[y * mask.w + x] !== 0) return false;
+  return true;
+}
+
+// 标签只能落在纯白处（导出时可选画题号/选项字母）
+function findLabelSpot(mask, labelRect, candidates) {
+  const s = mask.pxPerPt;
+  for (const c of candidates) {
+    const x = Math.round(c.x * s);
+    const y = Math.round(c.y * s);
+    const w = Math.round(labelRect.w * s);
+    const h = Math.round(labelRect.h * s);
+    if (x < 0 || y < 0 || x + w > mask.w || y + h > mask.h) continue;
+    let clear = true;
+    for (let j = 0; j < h && clear; j += 1) {
+      for (let i = 0; i < w; i += 1) {
+        if (mask.data[(y + j) * mask.w + (x + i)] !== 0) { clear = false; break; }
+      }
+    }
+    if (clear) return { x: c.x, y: c.y };
+  }
+  return null;
+}
+
+// ---- src/core/checksum.js ----
+// 校验和：ZIP 用 crc32，PNG 的 zlib 流用 adler32
+// 状态：已实现。纯函数。
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes, crc = 0) {
+  let c = (crc ^ 0xffffffff) >>> 0;
+  for (let i = 0; i < bytes.length; i += 1) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function adler32(bytes) {
+  let a = 1;
+  let b = 0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    a = (a + bytes[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
+}
+
+// ---- src/core/bytes.js ----
+// 字节小工具：拼接、大小端整数
+// 状态：已实现。PNG 用大端，ZIP 用小端，别搞混。
+
+function concatBytes(parts) {
+  let total = 0;
+  for (const p of parts) total += p.length;
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+function be32(v) {
+  return [(v >>> 24) & 0xff, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff];
+}
+
+function le16(v) {
+  return [v & 0xff, (v >>> 8) & 0xff];
+}
+
+function le32(v) {
+  return [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+}
+
+// ---- src/io/png.js ----
+// 最小 PNG 编码器：RGBA 像素 → RGB PNG（zlib 用 stored 块，不依赖 canvas / zlib）
+// 状态：已实现。导出永远是白底，所以丢掉 alpha 通道。
+
+
+
+
+const SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+function chunk(type, data) {
+  const typeBytes = new TextEncoder().encode(type);
+  const body = new Uint8Array(typeBytes.length + data.length);
+  body.set(typeBytes, 0);
+  body.set(data, typeBytes.length);
+  return [new Uint8Array(be32(data.length)), body, new Uint8Array(be32(crc32(body)))];
+}
+
+// zlib 容器 + 不压缩的 deflate 块
+function zlibStored(raw) {
+  const out = [new Uint8Array([0x78, 0x01])];
+  let at = 0;
+  while (at < raw.length) {
+    const n = Math.min(65535, raw.length - at);
+    const final = at + n >= raw.length ? 1 : 0;
+    out.push(new Uint8Array([final, n & 0xff, (n >>> 8) & 0xff, ~n & 0xff, (~n >>> 8) & 0xff]));
+    out.push(raw.subarray(at, at + n));
+    at += n;
+  }
+  out.push(new Uint8Array(be32(adler32(raw))));
+  return concatBytes(out);
+}
+
+// image: { width, height, data: RGBA }
+function encodePng(image) {
+  const { width, height, data } = image;
+  const stride = width * 3;
+  const raw = new Uint8Array((stride + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    const rowAt = y * (stride + 1);
+    raw[rowAt] = 0; // filter: none
+    for (let x = 0; x < width; x += 1) {
+      const src = (y * width + x) * 4;
+      const dst = rowAt + 1 + x * 3;
+      raw[dst] = data[src];
+      raw[dst + 1] = data[src + 1];
+      raw[dst + 2] = data[src + 2];
+    }
+  }
+
+  const ihdr = new Uint8Array([...be32(width), ...be32(height), 8, 2, 0, 0, 0]);
+  return concatBytes([
+    new Uint8Array(SIG),
+    ...chunk('IHDR', ihdr),
+    ...chunk('IDAT', zlibStored(raw)),
+    ...chunk('IEND', new Uint8Array(0)),
+  ]);
+}
+
+// ---- src/core/naming.js ----
+// 导出文件名与配置键
+// 状态：已实现。规则见 SPEC 第 6/7 节：p{页:02}-{序号:02}-{stem|optA..optD}.png
+
+
+
+const OPT_LETTERS = ['A', 'B', 'C', 'D'];
+
+function pad(n, width = 2) {
+  return String(Math.trunc(n)).padStart(width, '0');
+}
+
+function stemName() {
+  return 'stem';
+}
+
+function optName(which) {
+  const idx = typeof which === 'number' ? which : OPT_LETTERS.indexOf(String(which).toUpperCase());
+  if (idx < 0 || idx >= OPT_LETTERS.length) {
+    throw figcutError('bad-option', '选项只能是 A-D 或 0-3', { which });
+  }
+  return 'opt' + OPT_LETTERS[idx];
+}
+
+function regionFileName(region) {
+  const page = region.page === undefined ? 1 : region.page;
+  const index = region.index === undefined ? 1 : region.index;
+  const kind = region.kind === undefined ? 'stem' : region.kind;
+  const tail = kind === 'stem' ? stemName() : optName(region.opt);
+  return 'p' + pad(page) + '-' + pad(index) + '-' + tail + '.png';
+}
+
+function zipName(pdfName) {
+  const base = String(pdfName || 'figures').replace(/\.[Pp][Dd][Ff]$/, '');
+  return 'figures_' + base + '.zip';
+}
+
+// 改名等于新文件：配置键含字节数。
+function configKey(fileName, bytes) {
+  return String(fileName) + '|' + Number(bytes);
+}
+
+// ---- src/io/export.js ----
+// 导出 300dpi 白底 PNG
+// 状态：已实现。像素搬运与编码都不依赖 canvas，浏览器里只要先拿到 ImageData。
+
+
+
+
+
+
+// 导出尺寸 = (导出框 + 边距) × DPI，像素对齐不重采样。
+function computePixels(box, opts = {}) {
+  const dpi = opts.dpi === undefined ? 300 : opts.dpi;
+  const margin = opts.margin === undefined ? 8 : opts.margin;
+  return {
+    w: Math.round(pxForDpi(box.w + margin * 2, dpi)),
+    h: Math.round(pxForDpi(box.h + margin * 2, dpi)),
+    dpi,
+    margin,
+  };
+}
+
+// 从整页像素里裁一块，四周补纯白。image: {width,height,data:RGBA}
+function cropRgba(image, boxPx, marginPx = 0) {
+  const w = Math.max(1, Math.round(boxPx.w + marginPx * 2));
+  const h = Math.max(1, Math.round(boxPx.h + marginPx * 2));
+  const out = new Uint8ClampedArray(w * h * 4);
+  out.fill(255);
+
+  const left = Math.round(boxPx.x - marginPx);
+  const top = Math.round(boxPx.y - marginPx);
+
+  for (let y = 0; y < h; y += 1) {
+    const sy = top + y;
+    if (sy < 0 || sy >= image.height) continue;
+    for (let x = 0; x < w; x += 1) {
+      const sx = left + x;
+      if (sx < 0 || sx >= image.width) continue;
+      const s = (sy * image.width + sx) * 4;
+      const d = (y * w + x) * 4;
+      out[d] = image.data[s];
+      out[d + 1] = image.data[s + 1];
+      out[d + 2] = image.data[s + 2];
+      out[d + 3] = 255;
+    }
+  }
+  return { width: w, height: h, data: out };
+}
+
+// 多边形在这个高度上的 x 跨度（pt），偶奇规则
+function polySpansAt(poly, y) {
+  const xs = [];
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i, i += 1) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > y === b.y > y) continue;
+    xs.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
+  }
+  xs.sort((p1, p2) => p1 - p2);
+  const out = [];
+  for (let k = 0; k + 1 < xs.length; k += 2) out.push([xs[k], xs[k + 1]]);
+  return out;
+}
+
+// 按导出像素矩形精确裁切；给了多边形就把多边形外涂白（v2 的 destination-in）。
+function cropPxRgba(image, pxRect, opts = {}) {
+  const [x0, y0, x1, y1] = pxRect;
+  const w = Math.max(1, x1 - x0);
+  const h = Math.max(1, y1 - y0);
+  const out = new Uint8ClampedArray(w * h * 4);
+  out.fill(255);
+  for (let y = 0; y < h; y += 1) {
+    const sy = y0 + y;
+    if (sy < 0 || sy >= image.height) continue;
+    for (let x = 0; x < w; x += 1) {
+      const sx = x0 + x;
+      if (sx < 0 || sx >= image.width) continue;
+      const s = (sy * image.width + sx) * 4;
+      const d = (y * w + x) * 4;
+      out[d] = image.data[s];
+      out[d + 1] = image.data[s + 1];
+      out[d + 2] = image.data[s + 2];
+      out[d + 3] = 255;
+    }
+  }
+  // 多边形蒙版：多边形外的像素一律涂白
+  const poly = opts.poly;
+  const scale = opts.scale;
+  if (poly && poly.length >= 3 && scale > 0) {
+    for (let y = 0; y < h; y += 1) {
+      const yc = (y0 + y + 0.5) / scale;
+      const spans = polySpansAt(poly, yc);
+      let cursor = 0;
+      for (const [xa, xb] of spans) {
+        const a = Math.max(0, Math.ceil(xa * scale) - x0);
+        const b = Math.min(w, Math.floor(xb * scale) - x0);
+        for (let x = cursor; x < a && x < w; x += 1) {
+          const d = (y * w + x) * 4;
+          out[d] = 255; out[d + 1] = 255; out[d + 2] = 255;
+        }
+        if (b > cursor) cursor = b;
+      }
+      for (let x = Math.max(cursor, 0); x < w; x += 1) {
+        const d = (y * w + x) * 4;
+        out[d] = 255; out[d + 1] = 255; out[d + 2] = 255;
+      }
+    }
+  }
+
+  return { width: w, height: h, data: out };
+}
+
+function renderPngPx(image, pxRect, opts = {}) {
+  return encodePng(cropPxRgba(image, pxRect, opts));
+}
+
+// 不重采样：页面位图必须恰好是 dpi/72 px/pt 渲出来的，否则直接报错。
+function renderPng(image, boxPt, opts = {}) {
+  const dpi = opts.dpi === undefined ? 300 : opts.dpi;
+  const margin = opts.margin === undefined ? 8 : opts.margin;
+  const want = dpi / 72;
+  const scale = opts.scale === undefined ? want : opts.scale;
+  if (Math.abs(scale - want) > 1e-6) {
+    throw figcutError('scale-mismatch', '导出必须按 dpi/72 渲染，不重采样', { scale, want, dpi });
+  }
+  return encodePng(
+    cropRgba(image, { x: boxPt.x * scale, y: boxPt.y * scale, w: boxPt.w * scale, h: boxPt.h * scale }, margin * scale)
+  );
+}
+
+// 一批区域 → [{name, bytes}]
+function exportRegions(input) {
+  const { image, regions } = input;
+  const dpi = input.dpi === undefined ? 300 : input.dpi;
+  const margin = input.margin === undefined ? 8 : input.margin;
+  const scale = input.scale === undefined ? dpi / 72 : input.scale;
+  return regions.map((r) => ({
+    name: regionFileName(r),
+    bytes: renderPng(image, r.box, { scale, dpi, margin }),
+  }));
+}
+
+// ---- src/io/zip.js ----
+// ZIP 打包与清单 JSON
+// 状态：已实现。只用 store（不压缩），因此 node 里能跑、能真解开。
+
+
+
+
+// 固定时间戳（1980-01-01 00:00），保证同样输入产出同样字节。
+const DOS_TIME = 0;
+const DOS_DATE = 0x0021;
+
+function createZip() {
+  return { entries: [] };
+}
+
+function addFile(zip, name, bytes) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  zip.entries.push({ name: String(name), data, crc: crc32(data) });
+  return zip;
+}
+
+function toBytes(zip) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+
+  for (const entry of zip.entries) {
+    const name = new TextEncoder().encode(entry.name);
+    const local = [
+      ...le32(0x04034b50),
+      ...le16(20),
+      ...le16(0),
+      ...le16(0),
+      ...le16(DOS_TIME),
+      ...le16(DOS_DATE),
+      ...le32(entry.crc),
+      ...le32(entry.data.length),
+      ...le32(entry.data.length),
+      ...le16(name.length),
+      ...le16(0),
+    ];
+    locals.push(new Uint8Array(local), name, entry.data);
+
+    const central = [
+      ...le32(0x02014b50),
+      ...le16(20),
+      ...le16(20),
+      ...le16(0),
+      ...le16(0),
+      ...le16(DOS_TIME),
+      ...le16(DOS_DATE),
+      ...le32(entry.crc),
+      ...le32(entry.data.length),
+      ...le32(entry.data.length),
+      ...le16(name.length),
+      ...le16(0),
+      ...le16(0),
+      ...le16(0),
+      ...le16(0),
+      ...le32(0),
+      ...le32(offset),
+    ];
+    centrals.push(new Uint8Array(central), name);
+
+    offset += local.length + name.length + entry.data.length;
+  }
+
+  const centralBytes = concatBytes(centrals);
+  const end = new Uint8Array([
+    ...le32(0x06054b50),
+    ...le16(0),
+    ...le16(0),
+    ...le16(zip.entries.length),
+    ...le16(zip.entries.length),
+    ...le32(centralBytes.length),
+    ...le32(offset),
+    ...le16(0),
+  ]);
+
+  return concatBytes([...locals, centralBytes, end]);
+}
+
+function toBlob(zip) {
+  const bytes = toBytes(zip);
+  if (typeof Blob !== 'undefined') {
+    return new Blob([bytes], { type: 'application/zip' });
+  }
+  return bytes;
+}
+
+// ---- src/app/export-zip.js ----
+// 导出全链路：白界框 → 300dpi PNG → ZIP
+// 状态：已实现（浏览器侧，需要 pdf.js 渲染）。
+
+
+
+
+
+
+
+
+
+
+
+const MASK_PPP = 2;
+
+// 按页分组、页内按竖直位置排序，给出 p{页}-{序号}-{类型}.png
+function planExports(regions) {
+  const sorted = [...regions].sort((a, b) => {
+    if (a.page !== b.page) return a.page - b.page;
+    return boundsOf(a).y - boundsOf(b).y;
+  });
+
+  const counters = new Map();
+  return sorted.map((r) => {
+    const n = (counters.get(r.page) || 0) + 1;
+    counters.set(r.page, n);
+    return {
+      region: r,
+      page: r.page,
+      index: n,
+      name: regionFileName({ page: r.page, index: n, kind: r.kind, opt: r.opt }),
+      box: boundsOf(r),
+    };
+  });
+}
+
+async function imageOf(page, scale) {
+  const canvas = await renderPage(page, { scale, dpr: 1 });
+  const ctx = canvas.getContext('2d');
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return { width: img.width, height: img.height, data: img.data };
+}
+
+async function exportZip(input) {
+  const { doc, regions } = input;
+  const dpi = input.dpi === undefined ? 300 : input.dpi;
+  const margin = input.margin === undefined ? 8 : input.margin;
+  const onProgress = input.onProgress || (() => {});
+  const scale = dpi / 72;
+
+  const plan = planExports(regions);
+  const pages = [...new Set(plan.map((p) => p.page))].sort((a, b) => a - b);
+  const zip = createZip();
+  const manifest = [];
+
+  for (let i = 0; i < pages.length; i += 1) {
+    const pageNo = pages[i];
+    onProgress({ page: pageNo, done: i, total: pages.length });
+
+    const page = await doc.pdf.getPage(pageNo);
+    const maskImage = await imageOf(page, MASK_PPP);
+    const mask = buildInkMask(maskImage, { pxPerPt: MASK_PPP });
+
+
+    const hires = await imageOf(page, scale);
+    const pageSize = page.getViewport({ scale: 1 });
+
+    for (const item of plan.filter((p) => p.page === pageNo)) {
+      // 框内非白像素的外接框 + 每边 margin（v2 语义）
+      const inkBox = computeExportBox(mask, item.box);
+      if (!inkBox) continue;
+      const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
+      const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
+      const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
+      // 不做多边形蒙版：蒙版会切断跨边的墨迹，导出必须是完整矩形图
+      const bytes = renderPngPx(hires, crop.px);
+      addFile(zip, item.name, bytes);
+      manifest.push({
+        name: item.name,
+        page: item.page,
+        index: item.index,
+        kind: item.region.kind,
+        opt: item.region.opt,
+        q: item.region.q,
+        box: {
+          x: +exportBox.x.toFixed(2),
+          y: +exportBox.y.toFixed(2),
+          w: +exportBox.w.toFixed(2),
+          h: +exportBox.h.toFixed(2),
+        },
+      });
+    }
+  }
+
+  const key = doc.id || 'document.pdf|0';
+  addFile(
+    zip,
+    'figure-regions.json',
+    new TextEncoder().encode(
+      JSON.stringify(
+        {
+          version: 4,
+          app: 'figcut',
+          files: {
+            [key]: {
+              source: input.source || '',
+              export: { dpi, margin },
+              updatedAt: Date.now(),
+              regions: manifest,
+            },
+          },
+        },
+        null,
+        2
+      )
+    )
+  );
+
+  onProgress({ page: null, done: pages.length, total: pages.length });
+  return {
+    bytes: toBytes(zip),
+    name: zipName(input.source || 'figures'),
+    files: manifest,
+  };
+}
+
+// ---- src/io/config.js ----
+// localStorage 配置 schema4 与迁移
+// 状态：已实现。本模块不直接碰 localStorage，只吃一个 getItem/setItem 的容器，方便单测。
+
+
+
+
+const STORAGE_KEY = 'figcut.regions';
+const SCHEMA = 4;
+
+function keyForFile(fileName, bytes) {
+  return configKey(fileName, bytes);
+}
+
+function groupByPage(regions) {
+  const pages = {};
+  for (const r of regions) {
+    const p = r.page || 1;
+    if (!pages[p]) pages[p] = [];
+    pages[p].push(r);
+  }
+  return pages;
+}
+
+// 从 pages 分组还原成扁平 regions，并补齐 id（重开时不能和内存里的 id 撞）
+function flattenPages(pages) {
+  const out = [];
+  let maxId = 0;
+  for (const page of Object.keys(pages || {})) {
+    for (const r of pages[page] || []) {
+      const id = Number(r.id) || 0;
+      if (id > maxId) maxId = id;
+      out.push({ ...r, page: Number(page) });
+    }
+  }
+  return { regions: out, nextId: maxId + 1 };
+}
+
+// 把 1/2/3 版配置抬到 schema4：{version, app, files:{key:{pages}}}
+function migrate(raw) {
+  if (raw && raw.version === SCHEMA && raw.files && typeof raw.files === 'object') {
+    return raw; // 已经是 schema4：原样返回，迁移必须幂等
+  }
+
+  const cfg = { version: SCHEMA, app: 'figcut', files: {} };
+  if (!raw) return cfg;
+
+  if (Array.isArray(raw)) {
+    cfg.files._migrated = { source: '', export: null, updatedAt: 0, pages: groupByPage(raw) };
+    return cfg;
+  }
+
+  if (Array.isArray(raw.regions)) {
+    const key = raw.key || '_migrated';
+    cfg.files[key] = {
+      source: raw.source || '',
+      export: raw.export || null,
+      updatedAt: raw.updatedAt || 0,
+      pages: groupByPage(raw.regions),
+    };
+    return cfg;
+  }
+
+  if (raw.files && typeof raw.files === 'object') {
+    for (const [key, entry] of Object.entries(raw.files)) {
+      cfg.files[key] = {
+        source: (entry && entry.source) || '',
+        export: (entry && entry.export) || null,
+        updatedAt: (entry && entry.updatedAt) || 0,
+        pages: (entry && entry.pages) || {},
+      };
+    }
+  }
+  return cfg;
+}
+
+function readAll(storage) {
+  const raw = storage.getItem(STORAGE_KEY);
+  if (!raw) return { version: SCHEMA, app: 'figcut', files: {} };
+  try {
+    return migrate(JSON.parse(raw));
+  } catch (e) {
+    throw figcutError('bad-config', '配置不是合法 JSON，已放弃读取', { raw });
+  }
+}
+
+function loadConfig(storage, key) {
+  const cfg = readAll(storage);
+  return cfg.files[key] || null;
+}
+
+function saveConfig(storage, key, entry) {
+  const cfg = readAll(storage);
+  cfg.files[key] = {
+    source: entry.source || '',
+    export: entry.export || null,
+    updatedAt: entry.updatedAt || Date.now(),
+    pages: entry.pages || {},
+  };
+  storage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  return cfg;
+}
+
+// ---- src/ui/theme.js ----
+// 界面配色与 PDF 预览配色
+// 状态：已实现。界面与 PDF 是两套独立的三态，互不影响。
+
+const UI_MODES = ['system', 'light', 'dark'];
+const PDF_MODES = ['auto', 'normal', 'invert'];
+
+function createTheme(opts = {}) {
+  return {
+    ui: UI_MODES.includes(opts.ui) ? opts.ui : 'system',
+    pdf: PDF_MODES.includes(opts.pdf) ? opts.pdf : 'auto',
+  };
+}
+
+function nextOf(list, cur) {
+  const i = list.indexOf(cur);
+  return list[(i + 1) % list.length];
+}
+
+function cycleUi(theme) {
+  theme.ui = nextOf(UI_MODES, theme.ui);
+  return theme.ui;
+}
+
+function cyclePdfPreview(theme) {
+  theme.pdf = nextOf(PDF_MODES, theme.pdf);
+  return theme.pdf;
+}
+
+// 界面最终是浅还是深（跟随系统时看 prefersDark）
+function resolvedUi(theme, prefersDark) {
+  if (theme.ui === 'dark') return 'dark';
+  if (theme.ui === 'light') return 'light';
+  return prefersDark ? 'dark' : 'light';
+}
+
+// PDF 预览要不要反相：跟随界面 → 深色界面就反相；正常 → 永不；反相 → 永远
+function isInverted(theme, prefersDark) {
+  if (theme.pdf === 'invert') return true;
+  if (theme.pdf === 'normal') return false;
+  return resolvedUi(theme, prefersDark) === 'dark';
+}
+
+function applyTheme(theme, doc, prefersDark) {
+  const root = doc.documentElement;
+  root.dataset.ui = resolvedUi(theme, prefersDark);
+  root.dataset.pdfInvert = isInverted(theme, prefersDark) ? '1' : '0';
+  root.dataset.pdfMode = theme.pdf;
+  root.dataset.uiMode = theme.ui;
+  return { ui: root.dataset.ui, inverted: root.dataset.pdfInvert === '1' };
+}
+
+function loadTheme(storage) {
+  try {
+    const raw = storage && storage.getItem('figcut.theme');
+    if (!raw) return createTheme();
+    const j = JSON.parse(raw);
+    return createTheme({ ui: j.ui, pdf: j.pdf });
+  } catch (e) {
+    return createTheme();
+  }
+}
+
+function saveTheme(storage, theme) {
+  try {
+    storage.setItem('figcut.theme', JSON.stringify({ ui: theme.ui, pdf: theme.pdf }));
+  } catch (e) {
+    // 存不下就算了，不影响本次使用
+  }
+}
+
+// ---- src/app/settings.js ----
+// 全局设置：导出边距、DPI（与单文件标注配置分开存）
+// 状态：已实现。
+
+
+
+const DEFAULTS = { dpi: 300, margin: 8 };
+const RANGES = { dpi: [72, 1200], margin: [0, 80] };
+const SETTINGS_KEY = 'figcut.settings';
+
+function clampDpi(v) {
+  return Math.round(clamp(Number(v), RANGES.dpi[0], RANGES.dpi[1]));
+}
+
+function clampMargin(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(clamp(n, RANGES.margin[0], RANGES.margin[1]) * 10) / 10 : DEFAULTS.margin;
+}
+
+function createSettings(opts = {}) {
+  return { dpi: clampDpi(opts.dpi === undefined ? DEFAULTS.dpi : opts.dpi), margin: clampMargin(opts.margin === undefined ? DEFAULTS.margin : opts.margin) };
+}
+
+function setDpi(settings, v) {
+  settings.dpi = clampDpi(v);
+  return settings.dpi;
+}
+
+function setMargin(settings, v) {
+  settings.margin = clampMargin(v);
+  return settings.margin;
+}
+
+function loadSettings(storage) {
+  try {
+    const raw = storage && storage.getItem(SETTINGS_KEY);
+    if (!raw) return createSettings();
+    return createSettings(JSON.parse(raw));
+  } catch (e) {
+    return createSettings();
+  }
+}
+
+function saveSettings(storage, settings) {
+  try {
+    storage.setItem(SETTINGS_KEY, JSON.stringify({ dpi: settings.dpi, margin: settings.margin }));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---- src/ui/toast.js ----
+// 提示条与异常横幅
+// 状态：已实现。
+
+function toast(message, opts = {}) {
+  if (typeof document === 'undefined') return null;
+  const host = document.getElementById('banner');
+  if (!host) return null;
+  host.hidden = false;
+  host.textContent = String(message);
+  host.dataset.kind = opts.kind || 'error';
+  clearTimeout(host._timer);
+  host._timer = setTimeout(() => {
+    host.hidden = true;
+  }, opts.ms === undefined ? 10000 : opts.ms);
+  return host;
+}
+
+function banner(message, opts = {}) {
+  return toast(message, opts);
+}
+
+// ---- src/app/boot.js ----
+// 启动装配与状态机
+// 状态：已实现（打开 PDF、连续滚动、缩放、矩形/多边形标注、撤销重做）。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function boot(opts = {}) {
+  const shell = createShell();
+  const zoom = createZoom({ scale: 1 });
+  const stack = createPageStack({ container: shell.canvas, zoom });
+  renderZoomControl({ container: shell.canvas, zoom });
+
+  const ed = createEditor({ pageW: 595, pageH: 842 });
+  const hist = createHistory(JSON.stringify(ed.regions));
+  const overlays = new Map();
+  let state = 'idle';
+  let drawing = false;
+  let currentDoc = null;
+  let currentName = 'figures';
+
+  function download(bytes, filename) {
+    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 5000);
+    return true;
+  }
+
+  async function doExport() {
+    if (!currentDoc) {
+      toast('先打开一份 PDF');
+      return null;
+    }
+    if (ed.regions.length === 0) {
+      toast('还没有框，先圈几张图');
+      return null;
+    }
+    state = 'exporting';
+    try {
+      toast('正在导出 ' + ed.regions.length + ' 张图…', { kind: 'info', ms: 8000 });
+      const out = await exportZip({
+        doc: currentDoc,
+        regions: ed.regions,
+        source: currentName,
+        dpi: settings.dpi,
+        margin: settings.margin,
+        onProgress: ({ page, done, total }) => {
+          if (page) toast('正在导出第 ' + page + ' 页（' + (done + 1) + '/' + total + '）…', { kind: 'info', ms: 8000 });
+        },
+      });
+      download(out.bytes, out.name);
+      toast('已导出 ' + out.files.length + ' 张图 → ' + out.name, { kind: 'info', ms: 5000 });
+      return out;
+    } catch (e) {
+      toast('导出失败：' + (e && e.message ? e.message : e));
+      return null;
+    } finally {
+      state = 'ready';
+    }
+  }
+
+  const snapshot = () => JSON.stringify(ed.regions);
+  const record = (key) => {
+    commit(hist, snapshot(), key ? { key } : {});
+    scheduleSave();
+  };
+
+  // ---- 持久化：每份 PDF 一条 localStorage 记录，键 = 文件名|字节数 ----
+  const storage = (() => {
+    try {
+      return typeof window !== 'undefined' ? window.localStorage : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+  let currentKey = null;
+  let saveTimer = null;
+
+  // ---- 配色：界面与 PDF 两套独立三态 ----
+  const theme = loadTheme(storage);
+  const prefersDark = () =>
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false;
+
+  const settings = loadSettings(storage);
+
+  function applyColors() {
+    applyTheme(theme, document, prefersDark());
+    saveTheme(storage, theme);
+    return theme;
+  }
+
+  function persist(force) {
+    if (!storage || !currentKey) return false;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+      saveConfig(storage, currentKey, {
+        source: currentName,
+        export: { dpi: 300, margin: 8 },
+        updatedAt: Date.now(),
+        pages: groupByPage(ed.regions),
+      });
+      return true;
+    } catch (e) {
+      toast('存不下标注（localStorage 满了？），请尽快导出 ZIP');
+      return false;
+    }
+  }
+
+  function scheduleSave() {
+    if (!storage || !currentKey) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => persist(true), 200);
+  }
+
+  // 右栏：常驻预览 + 区域列表
+  const doc = shell.canvas.ownerDocument;
+  const previewHost = doc.createElement('div');
+  previewHost.className = 'preview-host';
+  const listHost = doc.createElement('div');
+  listHost.className = 'region-list';
+  shell.panelRight.append(previewHost, listHost);
+  const preview = createPreview(previewHost);
+  let lastListSig = '';
+
+  function selectRegion(region) {
+    if (!region) {
+      ed.selectedId = null;
+    } else {
+      ed.selectedId = region.id;
+      if (region.page !== ed.page) setPage(ed, region.page);
+      ed.pageW = overlays.get(region.page) ? overlays.get(region.page).size.w : ed.pageW;
+      ed.pageH = overlays.get(region.page) ? overlays.get(region.page).size.h : ed.pageH;
+      const wrap = stack.pages.find((p) => p.no === region.page);
+      if (wrap && wrap.wrap.scrollIntoView) wrap.wrap.scrollIntoView({ block: 'nearest' });
+    }
+    refresh();
+  }
+
+  function renderPanels() {
+    const ov = overlays.get(ed.page);
+    const pageW = ov ? ov.size.w : ed.pageW;
+    const pageH = ov ? ov.size.h : ed.pageH;
+    const stackPage = stack.pages.find((p) => p.no === ed.page);
+    const source = stackPage ? stackPage.canvas : null;
+    const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === ed.page);
+
+    if (sel) {
+      const b = boundsOf(sel);
+      renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
+    } else {
+      renderPreview(preview, { source, pageW, pageH, selectedId: null, regions: regionsOfPage(ed.regions, ed.page) });
+    }
+
+    // 左栏：页码 + 标注数（只在签名变了才重建，画框拖动时不重排）
+    const sig = stack.pages.length + ':' + ed.regions.length + ':' + ed.page;
+    if (sig !== lastListSig) {
+      lastListSig = sig;
+      renderPageList(shell.panelLeft, {
+        pages: stack.pages,
+        current: ed.page,
+        regions: ed.regions,
+        onPick: (no) => goPage(no),
+      });
+    }
+
+    renderRegions(listHost, {
+      regions: ed.regions,
+      page: ed.page,
+      selectedId: ed.selectedId,
+      onSelect: selectRegion,
+      onChange: (region, meta) => {
+        if (!meta || !meta.quiet) record(null);
+        refresh();
+      },
+      onDelete: (region) => {
+        const idx = ed.regions.indexOf(region);
+        if (idx >= 0) ed.regions.splice(idx, 1);
+        if (ed.selectedId === region.id) ed.selectedId = null;
+        record(null);
+        refresh();
+      },
+    });
+  }
+
+  function render() {
+    for (const [page, ov] of overlays) {
+      drawRegions(ov, regionsOfPage(ed.regions, page), {
+        selectedId: page === ed.page ? ed.selectedId : null,
+        selected: page === ed.page ? ed.regions.find((r) => r.id === ed.selectedId) || null : null,
+        draft: page === ed.page ? ed.draft : null,
+        scale: zoom.scale,
+      });
+    }
+    renderPanels();
+  }
+
+  const refresh = render;
+
+  // 顶栏左簇：打开 → 撤销 → 重做（工具组是画布左上的浮层，不在这儿）
+  addButton(shell, 'left', '打开', async () => {
+    const file = await pickFile();
+    if (file) load(file);
+  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.open });
+
+  const undoUi = () => {
+    const prev = undo(hist);
+    if (prev === null) return;
+    ed.regions = JSON.parse(prev);
+    ed.selectedId = null;
+    render();
+  };
+  const redoUi = () => {
+    const next = redo(hist);
+    if (next === null) return;
+    ed.regions = JSON.parse(next);
+    ed.selectedId = null;
+    render();
+  };
+
+  addButton(shell, 'left', '撤销', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销', icon: ICONS.undo });
+  addButton(shell, 'left', '重做', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做', icon: ICONS.redo });
+  // 导出设置：边距 / DPI
+  const settingsBox = doc.createElement('div');
+  settingsBox.className = 'settings-popover';
+  settingsBox.hidden = true;
+
+  const dpiInput = doc.createElement('input');
+  dpiInput.type = 'number';
+  dpiInput.min = '72';
+  dpiInput.max = '1200';
+  dpiInput.value = String(settings.dpi);
+  dpiInput.title = '导出 DPI（72–1200）';
+
+  const marginInput = doc.createElement('input');
+  marginInput.type = 'number';
+  marginInput.min = '0';
+  marginInput.max = '80';
+  marginInput.step = '0.5';
+  marginInput.value = String(settings.margin);
+  marginInput.title = '边距 pt（0–80）';
+
+  const dpiLabel = doc.createElement('label');
+  dpiLabel.textContent = 'DPI';
+  dpiLabel.appendChild(dpiInput);
+  const marginLabel = doc.createElement('label');
+  marginLabel.textContent = '边距';
+  marginLabel.appendChild(marginInput);
+  settingsBox.append(dpiLabel, marginLabel);
+  document.body.appendChild(settingsBox);
+
+  dpiInput.addEventListener('change', () => {
+    dpiInput.value = String(setDpi(settings, dpiInput.value));
+    saveSettings(storage, settings);
+  });
+  marginInput.addEventListener('change', () => {
+    marginInput.value = String(setMargin(settings, marginInput.value));
+    saveSettings(storage, settings);
+  });
+
+  addButton(shell, 'right', '设置', () => {
+    settingsBox.hidden = !settingsBox.hidden;
+  }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
+
+  addButton(shell, 'right', '配色', () => {
+    cycleUi(theme);
+    applyColors();
+  }, { title: '界面配色：跟随系统 → 浅色 → 深色', ariaLabel: '界面配色', icon: ICONS.uiTheme });
+
+  addButton(shell, 'right', '反相', () => {
+    cyclePdfPreview(theme);
+    applyColors();
+  }, { title: 'PDF 预览：跟随界面 → 正常 → 反相 (Ctrl+I)', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+
+  addButton(shell, 'right', '导出', () => doExport(), {
+    title: '导出 ZIP (Ctrl+E)',
+    ariaLabel: '导出',
+    kind: 'btn',
+    suggested: true,
+    icon: ICONS.export,
+  });
+
+  // 浮动工具组：画布左上
+  const toolGroup = doc.createElement('div');
+  toolGroup.className = 'tool-group';
+  shell.canvas.appendChild(toolGroup);
+
+  const toolButtons = new Map();
+
+  function markTool(tool) {
+    for (const [name, btn] of toolButtons) btn.classList.toggle('is-active', name === tool);
+  }
+
+  const toolButton = (iconSvg, label, tool) => {
+    const btn = addButtonTo(toolGroup, label, () => {
+      setTool(ed, tool);
+      markTool(tool);
+    }, { title: label, ariaLabel: label, icon: iconSvg });
+    toolButtons.set(tool, btn);
+    if (tool === ed.tool) btn.classList.add('is-active');
+    return btn;
+  };
+
+  toolButton(ICONS.select, '选择 (V)', 'select');
+  toolButton(ICONS.rect, '矩形 (R)', 'rect');
+  toolButton(ICONS.poly, '多边形 (G)', 'poly');
+
+  function pointOf(ev) {
+    const el = ev.target && ev.target.closest ? ev.target.closest('.page') : null;
+    if (!el) return null;
+    const canvas = el.querySelector('canvas');
+    const box = canvas.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return null;
+    const no = Number(el.dataset.page);
+    const ov = overlays.get(no);
+    const size = ov ? ov.size : { w: ed.pageW, h: ed.pageH };
+    return {
+      no,
+      pt: {
+        x: ((ev.clientX - box.left) / box.width) * size.w,
+        y: ((ev.clientY - box.top) / box.height) * size.h,
+      },
+      size,
+    };
+  }
+
+  // 中键拖拽平移
+  let pan = null;
+  shell.canvas.addEventListener('pointerdown', (ev) => {
+    if (ev.button === 1) {
+      pan = { x: ev.clientX, y: ev.clientY, left: stack.root.scrollLeft, top: stack.root.scrollTop };
+      ev.preventDefault();
+    }
+  });
+
+  shell.canvas.addEventListener('pointerdown', (ev) => {
+    if (state !== 'ready' || ev.button === 1) return;
+    const hit = pointOf(ev);
+    if (!hit) return;
+    if (hit.no !== ed.page) setPage(ed, hit.no);
+    ed.pageW = hit.size.w;
+    ed.pageH = hit.size.h;
+    drawing = true;
+    pointerDown(ed, hit.pt);
+    render();
+  });
+
+  shell.canvas.addEventListener('pointermove', (ev) => {
+    if (pan) {
+      stack.root.scrollLeft = pan.left - (ev.clientX - pan.x);
+      stack.root.scrollTop = pan.top - (ev.clientY - pan.y);
+      return;
+    }
+    if (!drawing || state !== 'ready') return;
+    const hit = pointOf(ev);
+    if (!hit) return;
+    pointerMove(ed, hit.pt);
+    render();
+  });
+
+  shell.canvas.addEventListener('pointerup', (ev) => {
+    if (pan) {
+      pan = null;
+      return;
+    }
+    if (!drawing) return;
+    drawing = false;
+    const hit = pointOf(ev);
+    if (!hit) return;
+    const before = snapshot();
+    pointerUp(ed, hit.pt);
+    if (snapshot() !== before) record(null);
+    render();
+  });
+
+  // ---- 快捷键：统一走 app/shortcuts 的键表 ----
+  const fitDims = () => {
+    const ov = overlays.get(ed.page);
+    return {
+      viewportW: shell.canvas.clientWidth || 800,
+      viewportH: shell.canvas.clientHeight || 600,
+      pageW: ov ? ov.size.w : ed.pageW,
+      pageH: ov ? ov.size.h : ed.pageH,
+      padX: 24,
+      padY: 24,
+    };
+  };
+
+  function goPage(no) {
+    const total = stack.pages.length || 1;
+    const next = Math.min(Math.max(1, no), total);
+    stack.setCurrent(next);
+    if (ed.page !== next) {
+      ed.page = next;
+      ed.selectedId = null;
+      render();
+    }
+    return next;
+  }
+
+  const actions = {
+    'tool.select': () => { setTool(ed, 'select'); markTool('select'); },
+    'tool.rect': () => { setTool(ed, 'rect'); markTool('rect'); },
+    'tool.poly': () => { setTool(ed, 'poly'); markTool('poly'); },
+    'tool.closePoly': () => { if (closePoly(ed)) { record(null); render(); } },
+    'page.next': () => goPage(stack.current + 1),
+    'page.prev': () => goPage(stack.current - 1),
+    'page.plus10': () => goPage(stack.current + 10),
+    'page.minus10': () => goPage(stack.current - 10),
+    'page.first': () => goPage(1),
+    'page.last': () => goPage(stack.pages.length),
+    'zoom.in': () => setScale(zoom, stepZoom(zoom.scale, 1)),
+    'zoom.out': () => setScale(zoom, stepZoom(zoom.scale, -1)),
+    'zoom.reset': () => setScale(zoom, 1),
+    'zoom.fitPage': () => setFit(zoom, 'page', fitDims()),
+    'zoom.fitWidth': () => setFit(zoom, 'width', fitDims()),
+    'history.undo': undoUi,
+    'history.redo': redoUi,
+    'export.zip': () => doExport(),
+    'config.save': () => persist(true),
+    'file.open': async () => {
+      const file = await pickFile();
+      if (file) load(file);
+    },
+    'region.delete': () => {
+      if (deleteSelection(ed)) { record(null); render(); }
+    },
+    'region.nudge': (ev) => {
+      const v = nudgeVector(ev);
+      if (nudge(ed, v.dx, v.dy)) { record('nudge'); render(); }
+    },
+    'view.continuous': () => stack.applyLayout({ continuous: !stack.view.continuous }),
+    'view.dual': () => stack.applyLayout({ dual: !stack.view.dual }),
+    'view.oddLeft': () => stack.applyLayout({ oddLeft: !stack.view.oddLeft }),
+    'view.invert': () => {
+      theme.pdf = isInverted(theme, prefersDark()) ? 'normal' : 'invert';
+      applyColors();
+    },
+    cancel: () => {
+      ed.draft = null;
+      ed.selectedId = null;
+      render();
+    },
+  };
+
+  bindShortcuts(document, actions);
+
+  // Ctrl+滚轮：以指针为锚点缩放
+  shell.canvas.addEventListener('wheel', (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || state !== 'ready') return;
+    ev.preventDefault();
+    const root = stack.root;
+    const box = root.getBoundingClientRect();
+    const px = ev.clientX - box.left;
+    const py = ev.clientY - box.top;
+    const from = zoom.scale;
+    setScale(zoom, from * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+    const next = anchorAt({ x: root.scrollLeft, y: root.scrollTop }, px, py, from, zoom.scale);
+    root.scrollLeft = next.x;
+    root.scrollTop = next.y;
+  }, { passive: false });
+
+  // 滚动时当前页跟着走（右栏预览与列表要跟着变）
+  stack.root.addEventListener('scroll', () => {
+    if (state !== 'ready') return;
+    const rects = stack.visibleRects();
+    const viewportTop = shell.canvas.getBoundingClientRect().top + 8;
+    const no = pageAtScroll(rects, viewportTop);
+    if (no !== ed.page) {
+      ed.page = no;
+      ed.selectedId = null;
+      render();
+    }
+  }, { passive: true });
+
+  const load = async (file) => {
+    persist(true); // 打开新文件前先落上一份
+    state = 'loading';
+    setEmpty(shell, false);
+    setTitle(shell, file.name);
+    try {
+      const doc = await openFile(file, opts);
+      currentDoc = doc;
+      currentName = file.name;
+      const n = await stack.mount(doc);
+
+      overlays.clear();
+      for (const p of stack.pages) {
+        const vp = p.page.getViewport({ scale: 1 });
+        overlays.set(p.no, createOverlay(p.wrap, { w: vp.width, h: vp.height }));
+      }
+      ed.page = 1;
+      ed.pageW = stack.pages.length > 0 ? overlays.get(1).size.w : 595;
+      ed.pageH = stack.pages.length > 0 ? overlays.get(1).size.h : 842;
+
+      // 恢复这份 PDF 之前的标注
+      currentKey = keyForFile(file.name, file.size);
+      const saved = storage ? loadConfig(storage, currentKey) : null;
+      if (saved && saved.pages) {
+        const back = flattenPages(saved.pages);
+        ed.regions = back.regions;
+        ed.nextId = back.nextId;
+        ed.selectedId = null;
+        hist.past.length = 0;
+        hist.future.length = 0;
+        hist.present = snapshot();
+      }
+
+      render();
+      setTitle(shell, file.name + ' · ' + n + ' 页');
+      state = 'ready';
+    } catch (e) {
+      state = 'error';
+      toast('打开失败：' + (e && e.message ? e.message : e));
+      setEmpty(shell, true);
+    }
+  };
+
+  applyColors();
+  acceptDrop(shell.canvas, (file) => load(file));
+  subscribe(zoom, () => stack.applyZoom());
+
+  // 未捕获异常进底部横幅，不覆盖空状态，10 秒后自己消失
+  if (typeof window !== 'undefined') {
+    window.addEventListener('error', (ev) => {
+      toast('出错了：' + (ev && ev.message ? ev.message : ev));
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+      const reason = ev && ev.reason ? ev.reason.message || ev.reason : '未知错误';
+      toast('出错了：' + reason);
+    });
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => persist(true));
+    window.addEventListener('beforeunload', () => persist(true));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persist(true);
+    });
+  }
+
+  if (opts.url) {
+    const name = String(opts.url).split('/').pop() || 'document.pdf';
+    fetch(opts.url)
+      .then((res) => res.blob())
+      .then((blob) => load(new File([blob], name, { type: 'application/pdf' })))
+      .catch((e) => toast('打不开 ' + opts.url + '：' + e.message));
+  }
+
+  return {
+    shell,
+    zoom,
+    stack,
+    editor: ed,
+    history: hist,
+    load,
+    render,
+    exportZip: doExport,
+    persist: () => persist(true),
+    debug: () => ({ key: currentKey, hasStorage: !!storage, regions: ed.regions.length, state }),
+    status: () => state,
+  };
+}
+
+// 骨架里声明的名字：读装配后的状态
+function status(booted) {
+  return booted.status();
+}
+
+// ---- src/main.js ----
+// 入口：装配并启动。构建时被内联，开发时作为 ESM 入口。
+
+
+function start() {
+  try {
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    const app = boot({ url: q ? q.get('pdf') || undefined : undefined });
+    if (typeof window !== 'undefined') window.__figcut = app;
+  } catch (e) {
+    const banner = document.getElementById('banner');
+    if (banner) {
+      banner.hidden = false;
+      banner.textContent = '启动失败：' + (e && e.message ? e.message : e);
+    }
+    console.error(e);
+  }
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+}
+
+})();
+</script>
+</body>
+</html>
