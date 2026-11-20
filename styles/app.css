@@ -115,7 +115,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .body {
   display: grid;
-  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 0 var(--w-panel);
+  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) var(--w-panel);
   min-height: 0;
 }
 
@@ -323,6 +323,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 }
 
 .zoom-cell:hover { background: var(--hover); }
+.zoom-cell.is-wide { grid-column: span 2; }
 .zoom-cell.on { background: var(--accent); border-color: transparent; color: var(--accent-fg); font-weight: 600; }
 
 .zoom-menu[hidden] { display: none; }

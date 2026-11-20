@@ -13,7 +13,7 @@ const MENU = [
   [0.67, 2],
   [0.75, 1.5],
   [1, 1.25],
-  ['fit-page', 'fit-width'],
+  ['fit-width'],
 ];
 
 const pct = (v) => {
@@ -78,7 +78,6 @@ export function renderZoomControl(opts) {
       btn.addEventListener('click', () => {
         close();
         if (typeof item === 'number') setScale(z, item);
-        else if (item === 'fit-page') opts.onFitPage && opts.onFitPage();
         else if (item === 'fit-width') opts.onFitWidth && opts.onFitWidth();
       });
       cells.push(btn);
@@ -129,12 +128,10 @@ export function renderZoomControl(opts) {
         const v = Number(btn.dataset.value);
         btn.textContent = pct(v);
         btn.classList.toggle('on', !z.auto && z.mode === 'free' && Math.abs(z.scale - v) < 1e-6);
-      } else if (action === 'fit-page') {
-        btn.textContent = fits.page ? '整页 ' + pct(fits.page) : '整页';
-        btn.classList.toggle('on', z.mode === 'page');
       } else {
         btn.textContent = fits.width ? '页宽 ' + pct(fits.width) : '页宽';
         btn.classList.toggle('on', z.mode === 'width');
+        btn.classList.add('is-wide');
       }
     }
   }
@@ -142,8 +139,8 @@ export function renderZoomControl(opts) {
   function sync() {
     let label = pct(z.scale);
     if (z.auto) label = '自动';
-    else if (z.mode === 'page') label = '整页';
     else if (z.mode === 'width') label = '页宽';
+    else if (z.mode === 'page') label = pct(z.scale);
     entry.textContent = label + ' ▾';
     entry.title = '缩放：' + label;
     if (!menu.hidden) syncCells();

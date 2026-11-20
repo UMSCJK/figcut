@@ -52,7 +52,6 @@ export function boot(opts = {}) {
   renderZoomControl({
     container: shell.canvas,
     zoom,
-    onFitPage: () => setFit(zoom, 'page', fitDims()),
     onFitWidth: () => setFit(zoom, 'width', fitDims()),
     fitPcts: () => {
       const d = fitDims();
@@ -768,7 +767,7 @@ export function boot(opts = {}) {
     'zoom.in': () => setScale(zoom, stepZoom(zoom.scale, 1)),
     'zoom.out': () => setScale(zoom, stepZoom(zoom.scale, -1)),
     'zoom.reset': () => setScale(zoom, 1),
-    'zoom.fitPage': () => setFit(zoom, 'page', fitDims()),
+    'zoom.fitPage': () => setFit(zoom, 'width', fitDims()),
     'zoom.fitWidth': () => setFit(zoom, 'width', fitDims()),
     'history.undo': undoUi,
     'history.redo': redoUi,
@@ -916,9 +915,9 @@ export function boot(opts = {}) {
 
   // 适应页面/适应页宽/自动：窗口或侧栏一变就重新算，别等用户再点一次
   function refitIfNeeded() {
-    if (!(zoom.auto || zoom.mode === 'page' || zoom.mode === 'width')) return;
+    if (!(zoom.auto || zoom.mode === 'width')) return;
     const auto = zoom.auto;
-    setFit(zoom, zoom.mode === 'width' ? 'width' : 'page', fitDims());
+    setFit(zoom, 'width', fitDims());
     zoom.auto = auto;
   }
 
@@ -1090,9 +1089,7 @@ export function boot(opts = {}) {
   }
 
   bindSplitter(document.getElementById('split-left'), 'left');
-  // 右栏宽度锁死（不再自由拖动），只保留折叠
-  const splitRight = document.getElementById('split-right');
-  if (splitRight) splitRight.style.display = 'none';
+  // 右栏宽度锁死，只保留折叠（拖动条已从 DOM 移除）
 
   // 左栏单/双列：太窄时禁用
   const sideHead = document.getElementById('side-head');
@@ -1104,35 +1101,39 @@ export function boot(opts = {}) {
     colsBtn.innerHTML = ICONS.grid;
     sideHead.appendChild(colsBtn);
     colsBtn.addEventListener('click', () => {
-      layout.sideCols = layout.sideCols === 2 ? 1 : 2;
-      saveLayout();
+      if (layout.sideCols === 2) {
+        // 双列 → 单列，宽度不动
+        layout.sideCols = 1;
+      } else {
+        // 单列 → 双列；太窄就先撑到双列下限
+        const w = shell.panelLeft.getBoundingClientRect().width;
+        if (w < DOUBLE_MIN) {
+          layout.side = DOUBLE_MIN;
+          layout.leftCollapsed = false;
+        }
+        layout.sideCols = 2;
+      }
+      applyLayout();
       updateColsBtn();
       lastListSig = ''; // 列表结构变了，强制重建
       refresh();
+      scheduleRefit();
+      saveLayout();
     });
   }
 
-  // 双列只在够宽时生效；拖窄了自动回单列（偏好还留着，拖宽会恢复）
+  const DOUBLE_MIN = 340;
+
   function effectiveCols() {
-    const w = shell.panelLeft.getBoundingClientRect().width;
-    return layout.sideCols === 2 && w >= 340 ? 2 : 1;
+    return layout.sideCols === 2 ? 2 : 1;
   }
 
-  // 按钮随时可点：切的是"偏好"，宽度不够只是暂时不生效（不是禁用）
   function updateColsBtn() {
     if (!colsBtn) return;
-    const w = shell.panelLeft.getBoundingClientRect().width;
-    const wide = w >= 340;
-    const want = layout.sideCols === 2;
+    const double = layout.sideCols === 2;
     colsBtn.disabled = false;
-    colsBtn.classList.toggle('is-active', want);
-    colsBtn.title = want
-      ? wide
-        ? '切回单列'
-        : '双列已锁定：左栏拖到 340px 以上自动生效，点一下可取消'
-      : wide
-        ? '切到双列'
-        : '切到双列（需左栏 ≥340px，会先记下）';
+    colsBtn.classList.toggle('is-active', double);
+    colsBtn.title = double ? '切回单列' : '切到双列';
   }
 
   const leftToggle = document.getElementById('toggle-left');
