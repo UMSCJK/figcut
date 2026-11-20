@@ -115,7 +115,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .body {
   display: grid;
-  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) var(--w-panel);
+  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 5px var(--w-panel);
   min-height: 0;
 }
 
@@ -825,3 +825,8 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .inspector .opt-btn { grid-column: 1 / -1; width: 100%; }
 .inspector .region-q, .inspector .region-note { width: 100%; min-width: 0; height: 22px; }
+
+/* 兜底：右栏里的东西永远不许超出栏宽 */
+.panel > * { max-width: 100%; }
+.preview-canvas, .region-thumb, .lightbox-canvas { max-width: 100%; }
+.region-row { max-width: 100%; }

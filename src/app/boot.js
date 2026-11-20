@@ -701,8 +701,11 @@ export function boot(opts = {}) {
     // 扣掉 padding 与滚动条，这样"适应宽度"不会撑出横向滚动条
     const scrollX = el.offsetWidth - el.clientWidth;
     const scrollY = el.offsetHeight - el.clientHeight;
+    let vw = Math.max(1, el.clientWidth - padX - scrollX);
+    // 双页并排时「适应页宽」要按半宽算，否则两页加起来必定溢出
+    if (stack.view.dual) vw = Math.max(60, vw - 20) / 2;
     return {
-      viewportW: Math.max(1, el.clientWidth - padX - scrollX),
+      viewportW: Math.max(1, vw),
       viewportH: Math.max(1, el.clientHeight - padY - scrollY),
       pageW: ov ? ov.size.w : ed.pageW,
       pageH: ov ? ov.size.h : ed.pageH,
@@ -1122,7 +1125,7 @@ export function boot(opts = {}) {
     // 保证中间画布至少 420px，侧栏再大也不许把画布挤没
     const minCanvas = 420;
     const wantSide = layout.side || 210;
-    const wantPanel = 210;
+    const wantPanel = layout.panel || 210;
     const avail = Math.max(240, vw - minCanvas - 10);
     let side = wantSide;
     let panel = wantPanel;
@@ -1151,8 +1154,9 @@ export function boot(opts = {}) {
       if (!start) return;
       const dx = ev.clientX - start.x;
       const raw = side === 'left' ? start.w + dx : start.w - dx;
-      const min = side === 'left' ? 120 : 160;
-      const max = side === 'left' ? 360 : 460;
+      const vw = window.innerWidth;
+      const min = side === 'left' ? 120 : 180;
+      const max = side === 'left' ? 360 : Math.max(240, Math.min(560, Math.floor(vw * 0.45)));
       const w = Math.round(Math.max(min, Math.min(max, raw)));
       if (side === 'left') {
         layout.side = w;
@@ -1174,16 +1178,25 @@ export function boot(opts = {}) {
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
+    // 双击 = 恢复默认宽度（不再切折叠，折叠交给栏底按钮）
     el.addEventListener('dblclick', () => {
-      if (side === 'left') layout.leftCollapsed = !layout.leftCollapsed;
-      else layout.rightCollapsed = !layout.rightCollapsed;
+      if (side === 'left') {
+        layout.side = 210;
+        layout.leftCollapsed = false;
+      } else {
+        layout.panel = 210;
+        layout.rightCollapsed = false;
+      }
       applyLayout();
+      lastListSig = '';
+      render();
+      scheduleRefit();
       saveLayout();
     });
   }
 
   bindSplitter(document.getElementById('split-left'), 'left');
-  // 右栏宽度锁死，只保留折叠（拖动条已从 DOM 移除）
+  bindSplitter(document.getElementById('split-right'), 'right');
 
   // 左栏单/双列：太窄时禁用
   const sideHead = document.getElementById('side-head');
