@@ -77,12 +77,16 @@ export function boot(opts = {}) {
     }
     state = 'exporting';
     try {
+      toast('正在导出 ' + ed.regions.length + ' 张图…', { kind: 'info', ms: 8000 });
       const out = await exportZip({
         doc: currentDoc,
         regions: ed.regions,
         source: currentName,
         dpi: settings.dpi,
         margin: settings.margin,
+        onProgress: ({ page, done, total }) => {
+          if (page) toast('正在导出第 ' + page + ' 页（' + (done + 1) + '/' + total + '）…', { kind: 'info', ms: 8000 });
+        },
       });
       download(out.bytes, out.name);
       toast('已导出 ' + out.files.length + ' 张图 → ' + out.name, { kind: 'info', ms: 5000 });
@@ -551,6 +555,17 @@ export function boot(opts = {}) {
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => stack.applyZoom());
+
+  // 未捕获异常进底部横幅，不覆盖空状态，10 秒后自己消失
+  if (typeof window !== 'undefined') {
+    window.addEventListener('error', (ev) => {
+      toast('出错了：' + (ev && ev.message ? ev.message : ev));
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+      const reason = ev && ev.reason ? ev.reason.message || ev.reason : '未知错误';
+      toast('出错了：' + reason);
+    });
+  }
 
   if (typeof window !== 'undefined') {
     window.addEventListener('pagehide', () => persist(true));
