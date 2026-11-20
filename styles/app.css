@@ -115,7 +115,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .body {
   display: grid;
-  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 5px var(--w-panel);
+  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 0 var(--w-panel);
   min-height: 0;
 }
 
@@ -165,8 +165,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .pages {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
   padding: 56px 24px 44px;
   display: flex;
   flex-direction: column;
@@ -766,3 +765,22 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .canvas[data-tool="select"] .textlayer { pointer-events: auto; }
 .canvas[data-tool="select"] .textlayer span { pointer-events: auto; }
+
+/* 缩略图全屏查看 */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.lightbox[hidden] { display: none; }
+
+.lightbox-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 96vw; max-height: 96vh; }
+.lightbox-canvas { max-width: 94vw; max-height: 86vh; background: #fff; border-radius: 6px; box-shadow: var(--shadow-2); }
+.lightbox-bar { display: flex; align-items: center; gap: 10px; color: #fff; }
+.lightbox-bar .icon-btn { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; }
+.lightbox-no { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }

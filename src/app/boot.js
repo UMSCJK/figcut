@@ -36,6 +36,7 @@ import {
 } from '../view/editor.js';
 import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
+import { pickWithHandle, saveHandle, reopenRecent, hasPickHandle } from '../io/filehandles.js';
 import { exportZip } from '../app/export-zip.js';
 import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
 import { createTheme, cycleUi, cyclePdfPreview, applyTheme, loadTheme, saveTheme, isInverted } from '../ui/theme.js';
@@ -67,6 +68,7 @@ export function boot(opts = {}) {
   let currentDoc = null;
   let currentName = 'figures';
   let lastPt = null;
+  let liveRaf = 0;
 
   function download(bytes, filename) {
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
@@ -359,7 +361,10 @@ export function boot(opts = {}) {
         pages: stack.pages,
         current: ed.page,
         regions: ed.regions,
-        onPick: (no) => goPage(no),
+        onPick: (no) => {
+          goPage(no);
+          openLightbox(no);
+        },
         thumbFor,
         cols: effectiveCols(),
       });
@@ -404,8 +409,23 @@ export function boot(opts = {}) {
   const refresh = render;
 
   // 顶栏左簇：打开 → 撤销 → 重做（工具组是画布左上的浮层，不在这儿）
+  // 优先用文件句柄打开：这样「最近打开」才能真的直接打开
+  let pendingHandle = null;
+
+  async function chooseFile() {
+    if (hasPickHandle()) {
+      const picked = await pickWithHandle();
+      if (picked) {
+        pendingHandle = picked.handle;
+        return picked.file;
+      }
+      return null;
+    }
+    return pickFile();
+  }
+
   addButton(shell, 'left', '打开', async () => {
-    const file = await pickFile();
+    const file = await chooseFile();
     if (file) load(file);
   }, { title: '打开 PDF（Ctrl+O）', kind: 'btn' });
 
@@ -575,14 +595,14 @@ export function boot(opts = {}) {
     const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === hit.no);
     if (sel) {
       if (sel.shape === 'rect') {
-        if (cornerAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'nwse-resize';
+        if (cornerAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'pointer';
         if (edgeAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'pointer';
       } else if (vertexAt(sel.points, hit.pt.x, hit.pt.y, 10) >= 0) {
         return 'pointer';
       }
     }
     if (regionAt(ed, hit.pt)) return 'move';
-    return ed.tool === 'select' ? 'default' : 'crosshair';
+    return 'default';
   }
 
   shell.canvas.addEventListener('pointermove', (ev) => {
@@ -612,6 +632,18 @@ export function boot(opts = {}) {
     if (!hit) return;
     lastPt = hit.pt;
     pointerMove(ed, hit.pt);
+    // 拖动/改形状时橙框也要跟着变，不能等松手
+    const live = ed.regions.find((r) => r.id === ed.selectedId);
+    if (live && maskCache.has(live.page)) {
+      if (!liveRaf) {
+        liveRaf = requestAnimationFrame(() => {
+          liveRaf = 0;
+          const r2 = ed.regions.find((r) => r.id === ed.selectedId);
+          if (r2 && maskCache.has(r2.page)) applyMeasure(r2, maskCache.get(r2.page));
+          render();
+        });
+      }
+    }
     render();
   });
 
@@ -652,6 +684,55 @@ export function boot(opts = {}) {
       padY: 0,
     };
   };
+
+  // ---- 缩略图全屏查看 ----
+  const lb = document.getElementById('lightbox');
+  const lbCanvas = document.getElementById('lightbox-canvas');
+  const lbNo = document.getElementById('lb-no');
+  let lbPage = 1;
+
+  async function drawLightbox() {
+    const p = stack.pages.find((x) => x.no === lbPage);
+    if (!p) return;
+    const vp1 = p.page.getViewport({ scale: 1 });
+    const maxW = Math.min(window.innerWidth * 0.94, 1800);
+    const scale = Math.min(4, maxW / vp1.width);
+    const vp = p.page.getViewport({ scale });
+    lbCanvas.width = Math.round(vp.width);
+    lbCanvas.height = Math.round(vp.height);
+    const ctx = lbCanvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lbCanvas.width, lbCanvas.height);
+    await p.page.render({ canvasContext: ctx, viewport: vp }).promise;
+    lbNo.textContent = lbPage + ' / ' + stack.pages.length;
+  }
+
+  function openLightbox(no) {
+    if (!lb) return;
+    lbPage = no;
+    lb.hidden = false;
+    drawLightbox();
+  }
+
+  function closeLightbox() {
+    if (lb) lb.hidden = true;
+  }
+
+  if (lb) {
+    lb.addEventListener('click', (ev) => {
+      if (ev.target === lb) closeLightbox();
+    });
+    document.addEventListener('keydown', (ev) => {
+      if (lb.hidden) return;
+      if (ev.key === 'Escape') closeLightbox();
+      else if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
+      else if (ev.key === 'ArrowRight') { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); }
+      else return;
+      ev.preventDefault();
+    });
+    document.getElementById('lb-prev').addEventListener('click', () => { lbPage = Math.max(1, lbPage - 1); drawLightbox(); });
+    document.getElementById('lb-next').addEventListener('click', () => { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); });
+  }
 
   function goPage(no) {
     const total = stack.pages.length || 1;
@@ -810,6 +891,10 @@ export function boot(opts = {}) {
       pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
       pushRecent({ name: file.name, size: file.size, pages: n, ts: Date.now() });
+      if (pendingHandle) {
+        saveHandle(file.name, file.size, pendingHandle);
+        pendingHandle = null;
+      }
       state = 'ready';
     } catch (e) {
       state = 'error';
@@ -892,7 +977,13 @@ export function boot(opts = {}) {
 
       btn.append(name, meta);
       btn.addEventListener('click', async () => {
-        const file = await pickFile();
+        // 有句柄就直接开，没有才退回选择框
+        const direct = await reopenRecent(item);
+        if (direct) {
+          load(direct);
+          return;
+        }
+        const file = await chooseFile();
         if (file) load(file);
       });
       host.appendChild(btn);
@@ -987,7 +1078,9 @@ export function boot(opts = {}) {
   }
 
   bindSplitter(document.getElementById('split-left'), 'left');
-  bindSplitter(document.getElementById('split-right'), 'right');
+  // 右栏宽度锁死（不再自由拖动），只保留折叠
+  const splitRight = document.getElementById('split-right');
+  if (splitRight) splitRight.style.display = 'none';
 
   // 左栏单/双列：太窄时禁用
   const sideHead = document.getElementById('side-head');

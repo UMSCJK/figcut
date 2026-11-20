@@ -186,7 +186,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .body {
   display: grid;
-  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 5px var(--w-panel);
+  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 0 var(--w-panel);
   min-height: 0;
 }
 
@@ -236,8 +236,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .pages {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
   padding: 56px 24px 44px;
   display: flex;
   flex-direction: column;
@@ -838,6 +837,25 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .canvas[data-tool="select"] .textlayer { pointer-events: auto; }
 .canvas[data-tool="select"] .textlayer span { pointer-events: auto; }
 
+/* 缩略图全屏查看 */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.lightbox[hidden] { display: none; }
+
+.lightbox-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 96vw; max-height: 96vh; }
+.lightbox-canvas { max-width: 94vw; max-height: 86vh; background: #fff; border-radius: 6px; box-shadow: var(--shadow-2); }
+.lightbox-bar { display: flex; align-items: center; gap: 10px; color: #fff; }
+.lightbox-bar .icon-btn { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; }
+.lightbox-no { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+
 </style>
 </head>
 <body>
@@ -861,6 +879,16 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
       </div>
     </div>
     <div class="splitter" id="split-right" title="拖动调整宽度，双击折叠"></div>
+    <div class="lightbox" id="lightbox" hidden>
+      <div class="lightbox-inner">
+        <canvas class="lightbox-canvas" id="lightbox-canvas"></canvas>
+        <div class="lightbox-bar">
+          <button type="button" class="icon-btn" id="lb-prev" title="上一页">‹</button>
+          <span class="lightbox-no" id="lb-no">1</span>
+          <button type="button" class="icon-btn" id="lb-next" title="下一页">›</button>
+        </div>
+      </div>
+    </div>
     <aside class="panel" id="panel-right">
       <button type="button" class="side-toggle is-right" id="toggle-right" title="收起/展开右栏">›</button>
     </aside>
@@ -3251,6 +3279,105 @@ function pickFile() {
   });
 }
 
+// ---- src/io/filehandles.js ----
+// 记住最近打开的文件句柄（File System Access API + IndexedDB），
+// 这样点「最近打开」能直接打开，而不是再弹一次选择框。
+// 状态：已实现；不支持句柄的浏览器自动退回文件选择框。
+
+const DB_NAME = 'figcut';
+const STORE = 'handles';
+
+function hasIdb() {
+  return typeof indexedDB !== 'undefined';
+}
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function handleKey(name, size) {
+  return String(name) + '|' + Number(size);
+}
+
+async function saveHandle(name, size, handle) {
+  if (!handle || !hasIdb()) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(handle, handleKey(name, size));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadHandle(name, size) {
+  if (!hasIdb()) return null;
+  try {
+    const db = await openDb();
+    const handle = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(handleKey(name, size));
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return handle;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 直接打开最近文件：拿到句柄就读，权限被拒就返回 null 让调用方退回选择框
+async function reopenRecent(entry) {
+  const handle = await loadHandle(entry.name, entry.size);
+  if (!handle) return null;
+  try {
+    const perm = handle.queryPermission ? await handle.queryPermission({ mode: 'read' }) : 'granted';
+    if (perm !== 'granted') {
+      const asked = handle.requestPermission ? await handle.requestPermission({ mode: 'read' }) : 'denied';
+      if (asked !== 'granted') return null;
+    }
+    const file = await handle.getFile();
+    if (!file) return null;
+    return file;
+  } catch (e) {
+    return null;
+  }
+}
+
+function hasPickHandle() {
+  return typeof window !== 'undefined' && typeof window.showOpenFilePicker === 'function';
+}
+
+async function pickWithHandle() {
+  if (!hasPickHandle()) return null;
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }],
+      multiple: false,
+    });
+    if (!handle) return null;
+    const file = await handle.getFile();
+    return { file, handle };
+  } catch (e) {
+    return null; // 用户取消
+  }
+}
+
 // ---- src/core/checksum.js ----
 // 校验和：ZIP 用 crc32，PNG 的 zlib 流用 adler32
 // 状态：已实现。纯函数。
@@ -4074,6 +4201,7 @@ function banner(message, opts = {}) {
 
 
 
+
 function boot(opts = {}) {
   const shell = createShell();
   const zoom = createZoom({ scale: 1 });
@@ -4097,6 +4225,7 @@ function boot(opts = {}) {
   let currentDoc = null;
   let currentName = 'figures';
   let lastPt = null;
+  let liveRaf = 0;
 
   function download(bytes, filename) {
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
@@ -4389,7 +4518,10 @@ function boot(opts = {}) {
         pages: stack.pages,
         current: ed.page,
         regions: ed.regions,
-        onPick: (no) => goPage(no),
+        onPick: (no) => {
+          goPage(no);
+          openLightbox(no);
+        },
         thumbFor,
         cols: effectiveCols(),
       });
@@ -4434,8 +4566,23 @@ function boot(opts = {}) {
   const refresh = render;
 
   // 顶栏左簇：打开 → 撤销 → 重做（工具组是画布左上的浮层，不在这儿）
+  // 优先用文件句柄打开：这样「最近打开」才能真的直接打开
+  let pendingHandle = null;
+
+  async function chooseFile() {
+    if (hasPickHandle()) {
+      const picked = await pickWithHandle();
+      if (picked) {
+        pendingHandle = picked.handle;
+        return picked.file;
+      }
+      return null;
+    }
+    return pickFile();
+  }
+
   addButton(shell, 'left', '打开', async () => {
-    const file = await pickFile();
+    const file = await chooseFile();
     if (file) load(file);
   }, { title: '打开 PDF（Ctrl+O）', kind: 'btn' });
 
@@ -4605,14 +4752,14 @@ function boot(opts = {}) {
     const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === hit.no);
     if (sel) {
       if (sel.shape === 'rect') {
-        if (cornerAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'nwse-resize';
+        if (cornerAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'pointer';
         if (edgeAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'pointer';
       } else if (vertexAt(sel.points, hit.pt.x, hit.pt.y, 10) >= 0) {
         return 'pointer';
       }
     }
     if (regionAt(ed, hit.pt)) return 'move';
-    return ed.tool === 'select' ? 'default' : 'crosshair';
+    return 'default';
   }
 
   shell.canvas.addEventListener('pointermove', (ev) => {
@@ -4642,6 +4789,18 @@ function boot(opts = {}) {
     if (!hit) return;
     lastPt = hit.pt;
     pointerMove(ed, hit.pt);
+    // 拖动/改形状时橙框也要跟着变，不能等松手
+    const live = ed.regions.find((r) => r.id === ed.selectedId);
+    if (live && maskCache.has(live.page)) {
+      if (!liveRaf) {
+        liveRaf = requestAnimationFrame(() => {
+          liveRaf = 0;
+          const r2 = ed.regions.find((r) => r.id === ed.selectedId);
+          if (r2 && maskCache.has(r2.page)) applyMeasure(r2, maskCache.get(r2.page));
+          render();
+        });
+      }
+    }
     render();
   });
 
@@ -4682,6 +4841,55 @@ function boot(opts = {}) {
       padY: 0,
     };
   };
+
+  // ---- 缩略图全屏查看 ----
+  const lb = document.getElementById('lightbox');
+  const lbCanvas = document.getElementById('lightbox-canvas');
+  const lbNo = document.getElementById('lb-no');
+  let lbPage = 1;
+
+  async function drawLightbox() {
+    const p = stack.pages.find((x) => x.no === lbPage);
+    if (!p) return;
+    const vp1 = p.page.getViewport({ scale: 1 });
+    const maxW = Math.min(window.innerWidth * 0.94, 1800);
+    const scale = Math.min(4, maxW / vp1.width);
+    const vp = p.page.getViewport({ scale });
+    lbCanvas.width = Math.round(vp.width);
+    lbCanvas.height = Math.round(vp.height);
+    const ctx = lbCanvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, lbCanvas.width, lbCanvas.height);
+    await p.page.render({ canvasContext: ctx, viewport: vp }).promise;
+    lbNo.textContent = lbPage + ' / ' + stack.pages.length;
+  }
+
+  function openLightbox(no) {
+    if (!lb) return;
+    lbPage = no;
+    lb.hidden = false;
+    drawLightbox();
+  }
+
+  function closeLightbox() {
+    if (lb) lb.hidden = true;
+  }
+
+  if (lb) {
+    lb.addEventListener('click', (ev) => {
+      if (ev.target === lb) closeLightbox();
+    });
+    document.addEventListener('keydown', (ev) => {
+      if (lb.hidden) return;
+      if (ev.key === 'Escape') closeLightbox();
+      else if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
+      else if (ev.key === 'ArrowRight') { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); }
+      else return;
+      ev.preventDefault();
+    });
+    document.getElementById('lb-prev').addEventListener('click', () => { lbPage = Math.max(1, lbPage - 1); drawLightbox(); });
+    document.getElementById('lb-next').addEventListener('click', () => { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); });
+  }
 
   function goPage(no) {
     const total = stack.pages.length || 1;
@@ -4840,6 +5048,10 @@ function boot(opts = {}) {
       pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
       pushRecent({ name: file.name, size: file.size, pages: n, ts: Date.now() });
+      if (pendingHandle) {
+        saveHandle(file.name, file.size, pendingHandle);
+        pendingHandle = null;
+      }
       state = 'ready';
     } catch (e) {
       state = 'error';
@@ -4922,7 +5134,13 @@ function boot(opts = {}) {
 
       btn.append(name, meta);
       btn.addEventListener('click', async () => {
-        const file = await pickFile();
+        // 有句柄就直接开，没有才退回选择框
+        const direct = await reopenRecent(item);
+        if (direct) {
+          load(direct);
+          return;
+        }
+        const file = await chooseFile();
         if (file) load(file);
       });
       host.appendChild(btn);
@@ -5017,7 +5235,9 @@ function boot(opts = {}) {
   }
 
   bindSplitter(document.getElementById('split-left'), 'left');
-  bindSplitter(document.getElementById('split-right'), 'right');
+  // 右栏宽度锁死（不再自由拖动），只保留折叠
+  const splitRight = document.getElementById('split-right');
+  if (splitRight) splitRight.style.display = 'none';
 
   // 左栏单/双列：太窄时禁用
   const sideHead = document.getElementById('side-head');
