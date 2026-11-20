@@ -3,7 +3,8 @@ import { boot } from './app/boot.js';
 
 export function start() {
   try {
-    boot();
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    boot({ url: q ? q.get('pdf') || undefined : undefined });
   } catch (e) {
     const banner = document.getElementById('banner');
     if (banner) {

@@ -1,21 +1,61 @@
 // 缩放与鼠标锚点
-// 状态：骨架。接口已冻结，实现待补（view.zoom）。
+// 状态：已实现。状态与数学都在这，DOM 由 ui/zoom-control 负责。
 
-import { notImplemented } from '../core/errors.js';
+import { clamp } from '../core/units.js';
+import { MIN_SCALE, MAX_SCALE, fitPageScale, fitWidthScale } from '../core/layout.js';
 
-export function createZoom(...args) {
-  throw notImplemented('view.zoom.createZoom');
+export function createZoom(opts = {}) {
+  return {
+    scale: opts.scale === undefined ? 1 : opts.scale,
+    mode: 'free',
+    min: MIN_SCALE,
+    max: MAX_SCALE,
+    listeners: new Set(),
+  };
 }
 
-export function setScale(...args) {
-  throw notImplemented('view.zoom.setScale');
+function notify(z) {
+  for (const fn of z.listeners) fn(z.scale, z.mode);
 }
 
-export function setFit(...args) {
-  throw notImplemented('view.zoom.setFit');
+export function subscribe(z, fn) {
+  z.listeners.add(fn);
+  return () => z.listeners.delete(fn);
 }
 
-export function anchorAt(...args) {
-  throw notImplemented('view.zoom.anchorAt');
+export function setScale(z, value) {
+  const next = clamp(Number(value), z.min, z.max);
+  if (!Number.isFinite(next)) return z.scale;
+  z.mode = 'free';
+  if (Math.abs(next - z.scale) < 1e-6) return z.scale;
+  z.scale = next;
+  notify(z);
+  return z.scale;
 }
 
+// 'page' 整页可见，'width' 贴满宽度
+export function setFit(z, mode, dims) {
+  const scale =
+    mode === 'page'
+      ? fitPageScale(dims)
+      : mode === 'width'
+        ? fitWidthScale(dims)
+        : z.scale;
+  z.mode = mode;
+  if (Math.abs(scale - z.scale) > 1e-6) {
+    z.scale = scale;
+    notify(z);
+  }
+  return z.scale;
+}
+
+// 以指针为锚点缩放的滚动补偿：指针下的内容不许漂。
+export function anchorAt(scroll, px, py, from, to) {
+  if (!(from > 0) || !(to > 0)) return { x: scroll.x, y: scroll.y };
+  const cx = (scroll.x + px) / from;
+  const cy = (scroll.y + py) / from;
+  return {
+    x: Math.max(0, cx * to - px),
+    y: Math.max(0, cy * to - py),
+  };
+}

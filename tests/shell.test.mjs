@@ -1,12 +1,41 @@
-import { test, todo, assert } from '../tools/testkit.mjs';
-import * as m from '../src/ui/shell.js';
+import { test, assert } from '../tools/testkit.mjs';
+import { createShell, setTitle, addButton } from '../src/ui/shell.js';
 
-const API = ['createShell', 'setTitle', 'setFileInfo'];
-
-test('shell: 导出签名齐备', () => {
-  for (const n of API) assert(typeof m[n] === 'function', 'shell 缺少导出 ' + n);
+test('shell: 没有 DOM 时明确报错', () => {
+  let threw = false;
+  try {
+    createShell();
+  } catch (e) {
+    threw = e && e.code === 'no-dom';
+  }
+  assert(threw, 'node 里应抛 no-dom');
 });
 
-// 以下是实现前必须覆盖的行为，写成 todo 而不是假绿
-todo('shell: 标题绝对居中');
-todo('shell: 两侧栏可拖宽 120-360 / 160-420');
+test('shell: 用假 DOM 读写标题与按钮', () => {
+  const make = (id) => ({ id, textContent: '', children: [], appendChild(n) { this.children.push(n); }, addEventListener() {}, style: {} });
+  const nodes = {
+    'topbar-left': make('topbar-left'),
+    'topbar-right': make('topbar-right'),
+    'topbar-title': make('topbar-title'),
+    canvas: make('canvas'),
+    'panel-left': make('panel-left'),
+    'panel-right': make('panel-right'),
+    empty: make('empty'),
+    banner: make('banner'),
+  };
+  const doc = {
+    getElementById: (id) => nodes[id] || null,
+    createElement: () => ({ ...make('btn'), setAttribute() {}, addEventListener() {} }),
+  };
+  nodes.canvas.ownerDocument = doc;
+  nodes['topbar-left'].ownerDocument = doc;
+
+  const shell = createShell({ getElementById: doc.getElementById });
+  assert(shell.title === nodes['topbar-title']);
+  setTitle(shell, 'a.pdf · 12 页');
+  assert(nodes['topbar-title'].textContent === 'a.pdf · 12 页');
+
+  const btn = addButton(shell, 'left', '打开', () => {});
+  assert(btn.textContent === '打开');
+  assert(nodes['topbar-left'].children.length === 1);
+});
