@@ -3,7 +3,7 @@
 
 import { createShell, setTitle, setEmpty, addButton, addButtonTo } from '../ui/shell.js';
 import { createZoom, subscribe, setScale, setFit, anchorAt } from '../view/zoom.js';
-import { stepZoom } from '../core/layout.js';
+import { stepZoom, fitPageScale, fitWidthScale } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
 import { ICONS } from '../ui/icons.js';
@@ -52,6 +52,10 @@ export function boot(opts = {}) {
     zoom,
     onFitPage: () => setFit(zoom, 'page', fitDims()),
     onFitWidth: () => setFit(zoom, 'width', fitDims()),
+    fitPcts: () => {
+      const d = fitDims();
+      return { page: fitPageScale(d), width: fitWidthScale(d) };
+    },
   });
 
   const ed = createEditor({ pageW: 595, pageH: 842 });
@@ -352,7 +356,9 @@ export function boot(opts = {}) {
       selectedId: ed.selectedId,
       onSelect: selectRegion,
       onChange: (region, meta) => {
-        if (!meta || !meta.quiet) record(null);
+        // 打字时不重建列表，否则每敲一个字输入框就丢焦点
+        if (meta && meta.quiet) return;
+        record(null);
         refresh();
       },
       onThumb: regionThumb,

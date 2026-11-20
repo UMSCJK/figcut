@@ -353,15 +353,29 @@ button { cursor: pointer; }
 .zoom-menu {
   position: fixed;
   z-index: 70;
-  min-width: 150px;
-  max-height: 60vh;
-  overflow: auto;
-  padding: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, 68px);
+  gap: 3px;
+  padding: 6px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--card);
   box-shadow: var(--shadow-2);
 }
+
+.zoom-cell {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-cell:hover { background: var(--hover); }
+.zoom-cell.on { background: var(--accent); border-color: transparent; color: var(--accent-fg); font-weight: 600; }
 
 .zoom-menu[hidden] { display: none; }
 
@@ -564,9 +578,61 @@ button { cursor: pointer; }
   min-width: 0;
 }
 
-.region-kind { width: 58px; font-size: 11px; }
-.region-custom { width: 64px; padding: 0 5px; }
-.region-custom[hidden] { display: none; }
+.opt-btn {
+  height: 22px;
+  min-width: 56px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.opt-btn:hover { background: var(--hover); }
+
+.opt-menu {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: repeat(4, 34px);
+  gap: 3px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow-2);
+}
+
+.opt-menu[hidden] { display: none; }
+
+.opt-cell {
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 0;
+  text-align: center;
+}
+
+.opt-cell.is-wide { grid-column: span 4; }
+.opt-cell:hover { background: var(--hover); }
+.opt-cell.on { background: var(--accent); border-color: transparent; color: var(--accent-fg); font-weight: 600; }
+
+.opt-input {
+  grid-column: span 1;
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 11px;
+}
+
+.region-q { width: 44px; }
+.region-note { flex: 1; min-width: 0; }
 .region-q { width: 48px; font-family: var(--mono); padding: 0 5px; }
 .region-note { flex: 1; padding: 0 5px; border-color: var(--line); color: var(--text-2); }
 .region-label { font-size: 11.5px; color: var(--text-2); }
@@ -1092,24 +1158,46 @@ function icon(name, opts) {
 }
 
 // ---- src/ui/zoom-control.js ----
-// 画布右下角缩放控件：− [110% ▾] +，点中间弹出 Firefox/Okular 那种菜单
-// 状态：已实现。
+// 画布右下角缩放控件：− [100% ▾] +，菜单是两列五行的紧凑版
+// 状态：已实现。+/- 只在预设档位里走；整页/页宽显示实时算出的百分比。
 
 
 
 
+// 按钮步进用的档位
+const STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
-// Chrome 那套档位（去掉 800% 以上）
-const PRESETS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
+// 菜单：两列五行
+const MENU = [
+  [0.5, 5],
+  [0.67, 2],
+  [0.75, 1.5],
+  [1, 1.25],
+  ['fit-page', 'fit-width'],
+];
 
 const pct = (v) => {
   const p = v * 100;
   return (p >= 100 ? Math.round(p) : Math.round(p * 10) / 10) + '%';
 };
 
+function stepIndex(scale) {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < STEPS.length; i += 1) {
+    const d = Math.abs(STEPS[i] - scale);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 function renderZoomControl(opts) {
   const { container, zoom: z } = opts;
   const doc = container.ownerDocument;
+  const fitPcts = opts.fitPcts || (() => ({ page: null, width: null }));
 
   const box = doc.createElement('div');
   box.className = 'zoom-control';
@@ -1134,45 +1222,28 @@ function renderZoomControl(opts) {
   box.append(minus, entry, plus);
   container.appendChild(box);
 
-  // ---- 弹出菜单 ----
   const menu = doc.createElement('div');
   menu.className = 'zoom-menu';
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
 
-  const items = [
-    { action: 'auto', label: '自动缩放' },
-    { action: 'actual', label: '实际大小' },
-    { action: 'fit-page', label: '适合页面' },
-    { action: 'fit-width', label: '适合页宽' },
-    { action: 'sep' },
-    ...PRESETS.map((v) => ({ action: 'set', value: v, label: pct(v) })),
-  ];
-
-  const itemEls = [];
-  for (const it of items) {
-    if (it.action === 'sep') {
-      const hr = doc.createElement('hr');
-      menu.appendChild(hr);
-      continue;
+  const cells = [];
+  for (const row of MENU) {
+    for (const item of row) {
+      const btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'zoom-cell';
+      btn.dataset.action = typeof item === 'string' ? item : 'set';
+      if (typeof item === 'number') btn.dataset.value = String(item);
+      btn.addEventListener('click', () => {
+        close();
+        if (typeof item === 'number') setScale(z, item);
+        else if (item === 'fit-page') opts.onFitPage && opts.onFitPage();
+        else if (item === 'fit-width') opts.onFitWidth && opts.onFitWidth();
+      });
+      cells.push(btn);
+      menu.appendChild(btn);
     }
-    const btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.className = 'zoom-item';
-    btn.dataset.action = it.action;
-    if (it.value !== undefined) btn.dataset.value = String(it.value);
-    btn.textContent = it.label;
-    btn.addEventListener('click', () => {
-      close();
-      z.auto = it.action === 'auto';
-      if (it.action === 'set') setScale(z, it.value);
-      else if (it.action === 'actual') setScale(z, 1);
-      else if (it.action === 'fit-page') opts.onFitPage && opts.onFitPage();
-      else if (it.action === 'fit-width') opts.onFitWidth && opts.onFitWidth();
-      else if (it.action === 'auto') opts.onFitPage && opts.onFitPage();
-    });
-    itemEls.push(btn);
-    menu.appendChild(btn);
   }
   doc.body.appendChild(menu);
 
@@ -1180,10 +1251,12 @@ function renderZoomControl(opts) {
     const r = box.getBoundingClientRect();
     menu.style.left = Math.round(r.left) + 'px';
     menu.style.bottom = Math.round(window.innerHeight - r.top + 6) + 'px';
+    menu.style.top = 'auto';
   }
 
   function open() {
     place();
+    syncCells();
     menu.hidden = false;
     entry.classList.add('is-open');
     doc.addEventListener('pointerdown', onOutside, true);
@@ -1208,38 +1281,49 @@ function renderZoomControl(opts) {
 
   entry.addEventListener('click', () => (menu.hidden ? open() : close()));
 
-  const sync = () => {
+  function syncCells() {
+    const fits = fitPcts();
+    for (const btn of cells) {
+      const action = btn.dataset.action;
+      if (action === 'set') {
+        const v = Number(btn.dataset.value);
+        btn.textContent = pct(v);
+        btn.classList.toggle('on', !z.auto && z.mode === 'free' && Math.abs(z.scale - v) < 1e-6);
+      } else if (action === 'fit-page') {
+        btn.textContent = '整页' + (fits.page ? ' ' + pct(fits.page) : '');
+        btn.classList.toggle('on', z.mode === 'fit-page');
+      } else {
+        btn.textContent = '页宽' + (fits.width ? ' ' + pct(fits.width) : '');
+        btn.classList.toggle('on', z.mode === 'fit-width');
+      }
+    }
+  }
+
+  function sync() {
     let label = pct(z.scale);
-    if (z.auto) label = '自动缩放';
-    else if (z.mode === 'fit-page') label = '适合页面';
-    else if (z.mode === 'fit-width') label = '适合页宽';
+    if (z.auto) label = '自动';
+    else if (z.mode === 'fit-page') label = '整页';
+    else if (z.mode === 'fit-width') label = '页宽';
     entry.textContent = label + ' ▾';
     entry.title = '缩放：' + label;
-    const active = z.auto
-      ? 'auto'
-      : z.mode === 'fit-page'
-        ? 'fit-page'
-        : z.mode === 'fit-width'
-          ? 'fit-width'
-          : Math.abs(z.scale - 1) < 1e-6
-            ? 'actual'
-            : 'set';
-    for (const btn of itemEls) {
-      const hit = btn.dataset.action === active
-        && (active !== 'set' || Math.abs(Number(btn.dataset.value) - z.scale) < 1e-6);
-      btn.classList.toggle('on', hit);
-    }
-  };
+    if (!menu.hidden) syncCells();
+  }
   sync();
   z.listeners.add(sync);
 
-  minus.addEventListener('click', () => setScale(z, z.scale / 1.2));
-  plus.addEventListener('click', () => setScale(z, z.scale * 1.2));
+  minus.addEventListener('click', () => {
+    const i = stepIndex(z.scale);
+    setScale(z, STEPS[Math.max(0, i - 1)]);
+  });
+  plus.addEventListener('click', () => {
+    const i = stepIndex(z.scale);
+    setScale(z, STEPS[Math.min(STEPS.length - 1, i + 1)]);
+  });
 
   return { box, sync, menu };
 }
 
-function bindZoomInput(control, zoom) {
+function bindZoomInput(control) {
   return control;
 }
 
@@ -2097,11 +2181,10 @@ function drawCrop(preview, opts) {
 }
 
 // ---- src/ui/inspector.js ----
-// 选中区域的就地控件：类型（题干 / A–K / 自定义）、题号、备注
-// 状态：已实现。setter 是纯函数。
+// 类型选择器：自己画的九宫格（题干 / A–K / 自定义输入），不用原生 select
+// 状态：已实现。
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
-const KINDS = ['stem', ...LETTERS, 'custom'];
 
 function setKind(region, kind) {
   if (kind === 'stem') {
@@ -2118,6 +2201,7 @@ function setKind(region, kind) {
 }
 
 function setCustomOption(region, text) {
+  region.kind = 'opt'; // 自定义也是"选项"，不是题干
   region.opt = 'custom';
   region.optText = String(text || '').trim();
   return region;
@@ -2138,29 +2222,93 @@ function kindValue(region) {
   return region.opt === 'custom' ? 'custom' : region.opt || 'A';
 }
 
-function buildControls(doc, region, onChange) {
+function labelOfKind(region) {
+  const v = kindValue(region);
+  if (v === 'stem') return '题干';
+  if (v === 'custom') return region.optText ? region.optText : '自定义';
+  return v;
+}
+
+function buildControls(doc, region, onChange, opts = {}) {
   const row = doc.createElement('div');
   row.className = 'inspector';
 
-  const kind = doc.createElement('select');
-  kind.className = 'region-kind';
-  kind.title = '类型';
-  for (const k of KINDS) {
-    const o = doc.createElement('option');
-    o.value = k;
-    o.textContent = k === 'stem' ? '题干' : k === 'custom' ? '自定义' : k;
-    kind.appendChild(o);
+  // ---- 类型按钮 + 九宫格弹层 ----
+  const kindBtn = doc.createElement('button');
+  kindBtn.type = 'button';
+  kindBtn.className = 'opt-btn';
+  kindBtn.title = '类型：题干 / A–K / 自定义';
+
+  const menu = doc.createElement('div');
+  menu.className = 'opt-menu';
+  menu.hidden = true;
+
+  const stemBtn = doc.createElement('button');
+  stemBtn.type = 'button';
+  stemBtn.className = 'opt-cell is-wide';
+  stemBtn.textContent = '题干';
+  stemBtn.dataset.kind = 'stem';
+  menu.appendChild(stemBtn);
+
+  for (const letter of LETTERS) {
+    const b = doc.createElement('button');
+    b.type = 'button';
+    b.className = 'opt-cell';
+    b.textContent = letter;
+    b.dataset.kind = letter;
+    menu.appendChild(b);
   }
-  kind.value = kindValue(region);
 
   const custom = doc.createElement('input');
-  custom.className = 'region-custom';
+  custom.className = 'opt-cell opt-input';
   custom.type = 'text';
-  custom.placeholder = '自定义';
+  custom.placeholder = '其他';
   custom.value = region.optText || '';
   custom.title = '自定义选项名';
-  custom.hidden = kind.value !== 'custom';
+  menu.appendChild(custom);
 
+  const cells = [...menu.querySelectorAll('.opt-cell[data-kind]')];
+
+  function sync() {
+    kindBtn.textContent = labelOfKind(region) + ' ▾';
+    for (const c of cells) c.classList.toggle('on', c.dataset.kind === kindValue(region));
+    custom.classList.toggle('on', kindValue(region) === 'custom');
+  }
+  sync();
+
+  function close() {
+    menu.hidden = true;
+    doc.removeEventListener('pointerdown', onOutside, true);
+  }
+  function onOutside(ev) {
+    if (menu.contains(ev.target) || kindBtn.contains(ev.target)) return;
+    close();
+  }
+  function open() {
+    const r = kindBtn.getBoundingClientRect();
+    menu.style.left = Math.round(r.left) + 'px';
+    menu.style.top = Math.round(r.bottom + 4) + 'px';
+    menu.hidden = false;
+    doc.addEventListener('pointerdown', onOutside, true);
+    opts.onOpen && opts.onOpen();
+  }
+  kindBtn.addEventListener('click', () => (menu.hidden ? open() : close()));
+
+  for (const c of cells) {
+    c.addEventListener('click', () => {
+      setKind(region, c.dataset.kind);
+      sync();
+      close();
+      onChange(region, { structural: true });
+    });
+  }
+  custom.addEventListener('input', () => {
+    setCustomOption(region, custom.value);
+    sync();
+    onChange(region, { quiet: true });
+  });
+
+  // ---- 题号 / 备注 ----
   const q = doc.createElement('input');
   q.className = 'region-q';
   q.type = 'text';
@@ -2175,15 +2323,6 @@ function buildControls(doc, region, onChange) {
   note.value = region.note || '';
   note.title = '备注';
 
-  kind.addEventListener('change', () => {
-    setKind(region, kind.value);
-    custom.hidden = kind.value !== 'custom';
-    onChange(region);
-  });
-  custom.addEventListener('input', () => {
-    setCustomOption(region, custom.value);
-    onChange(region, { quiet: true });
-  });
   q.addEventListener('input', () => {
     setQuestion(region, q.value);
     onChange(region, { quiet: true });
@@ -2193,7 +2332,9 @@ function buildControls(doc, region, onChange) {
     onChange(region, { quiet: true });
   });
 
-  row.append(kind, custom, q, note);
+  row.append(kindBtn, q, note);
+  doc.body.appendChild(menu);
+  row._menu = menu;
   return row;
 }
 
@@ -2230,6 +2371,8 @@ function labelOf(region) {
 function renderRegions(host, opts) {
   const doc = host.ownerDocument;
   const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb } = opts;
+  // 清掉上一轮挂在 body 上的类型弹层
+  for (const old of doc.querySelectorAll('.opt-menu')) old.remove();
   host.textContent = '';
 
   const groups = groupRowsByPage(regions);
@@ -2253,7 +2396,8 @@ function renderRegions(host, opts) {
       row.className = 'region-row' + (r.id === selectedId ? ' is-selected' : '');
       row.dataset.id = String(r.id);
       row.addEventListener('click', (ev) => {
-        if (ev.target && ev.target.tagName === 'SELECT') return;
+        // 点控件（类型按钮/输入框）时不算"选中这一行"，否则列表重建会把弹层关掉
+        if (ev.target && ev.target.closest && ev.target.closest('.inspector')) return;
         onSelect(r);
       });
 
@@ -3748,6 +3892,10 @@ function boot(opts = {}) {
     zoom,
     onFitPage: () => setFit(zoom, 'page', fitDims()),
     onFitWidth: () => setFit(zoom, 'width', fitDims()),
+    fitPcts: () => {
+      const d = fitDims();
+      return { page: fitPageScale(d), width: fitWidthScale(d) };
+    },
   });
 
   const ed = createEditor({ pageW: 595, pageH: 842 });
@@ -4048,7 +4196,9 @@ function boot(opts = {}) {
       selectedId: ed.selectedId,
       onSelect: selectRegion,
       onChange: (region, meta) => {
-        if (!meta || !meta.quiet) record(null);
+        // 打字时不重建列表，否则每敲一个字输入框就丢焦点
+        if (meta && meta.quiet) return;
+        record(null);
         refresh();
       },
       onThumb: regionThumb,

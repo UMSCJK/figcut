@@ -23,6 +23,8 @@ export function labelOf(region) {
 export function renderRegions(host, opts) {
   const doc = host.ownerDocument;
   const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb } = opts;
+  // 清掉上一轮挂在 body 上的类型弹层
+  for (const old of doc.querySelectorAll('.opt-menu')) old.remove();
   host.textContent = '';
 
   const groups = groupRowsByPage(regions);
@@ -46,7 +48,8 @@ export function renderRegions(host, opts) {
       row.className = 'region-row' + (r.id === selectedId ? ' is-selected' : '');
       row.dataset.id = String(r.id);
       row.addEventListener('click', (ev) => {
-        if (ev.target && ev.target.tagName === 'SELECT') return;
+        // 点控件（类型按钮/输入框）时不算"选中这一行"，否则列表重建会把弹层关掉
+        if (ev.target && ev.target.closest && ev.target.closest('.inspector')) return;
         onSelect(r);
       });
 
