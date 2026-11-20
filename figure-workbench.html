@@ -263,6 +263,14 @@ button { cursor: pointer; }
   stroke-dasharray: 4 3;
 }
 
+.cropbox {
+  fill: none;
+  stroke: var(--ink-box);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
 .handle {
   fill: #ffffff;
   stroke: var(--accent);
@@ -407,10 +415,11 @@ button { cursor: pointer; }
 .page-no { font-variant-numeric: tabular-nums; }
 
 .page-count {
-  flex: none;
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
   min-width: 16px;
   height: 16px;
-  margin-top: 2px;
   padding: 0 4px;
   border-radius: 8px;
   background: var(--accent);
@@ -420,7 +429,13 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
 }
+
+.page-item:hover .page-count,
+.page-item:focus-visible .page-count,
+.page-item.is-current .page-count { opacity: 1; }
 
 .page-count:empty { display: none; }
 
@@ -549,6 +564,7 @@ button { cursor: pointer; }
 /* ---------- PDF 预览反相：只反相纸面 ---------- */
 
 :root[data-pdf-invert="1"] .page canvas,
+:root[data-pdf-invert="1"] .page-thumb,
 :root[data-pdf-invert="1"] .preview-canvas { filter: invert(1); }
 
 </style>
@@ -1158,6 +1174,28 @@ function createPageStack(opts) {
   // 视图状态：单/双页、奇偶、连续/分页
   const view = { dual: false, oddLeft: false, continuous: true };
 
+  // 缩放立刻给视觉反馈（CSS transform），真正的重绘防抖，避免 trackpad 缩放时闪
+  let visualScale = null;
+  function setVisualScale(scale) {
+    const base = pages.find((p) => p.renderedScale)?.renderedScale;
+    if (!base) return;
+    visualScale = scale;
+    const k = scale / base;
+    for (const p of pages) {
+      p.wrap.style.transformOrigin = '0 0';
+      p.wrap.style.transform = Math.abs(k - 1) < 0.002 ? '' : 'scale(' + k + ')';
+    }
+  }
+
+  let renderTimer = null;
+  function scheduleZoom() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      busy = busy.then(applyZoom);
+    }, 140);
+  }
+
   async function applyZoom() {
     if (!pdfDoc) return;
     const my = ++token;
@@ -1167,6 +1205,8 @@ function createPageStack(opts) {
     for (const p of pages) {
       if (my !== token) return;
       const vp = p.page.getViewport({ scale });
+      p.wrap.style.transform = '';
+      p.renderedScale = scale;
       p.canvas.style.width = Math.round(vp.width) + 'px';
       p.canvas.style.height = Math.round(vp.height) + 'px';
       p.overlay.style.width = Math.round(vp.width) + 'px';
@@ -1277,6 +1317,8 @@ function createPageStack(opts) {
       busy = busy.then(applyZoom);
       return busy;
     },
+    setVisualScale,
+    scheduleZoom,
     get current() {
       return current;
     },
@@ -1671,6 +1713,18 @@ function drawRegions(overlay, regions, opts = {}) {
   // 选中态画手柄，能拖哪儿一眼看得出
   if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
 
+  // 缩紧后的导出框：虚线画出来（v2 的 cropbox）
+  const ink = opts.selected && opts.selected.ink;
+  if (ink) {
+    const crop = doc.createElementNS(NS, 'rect');
+    crop.setAttribute('x', ink.x);
+    crop.setAttribute('y', ink.y);
+    crop.setAttribute('width', ink.w);
+    crop.setAttribute('height', ink.h);
+    crop.setAttribute('class', 'cropbox');
+    overlay.svg.appendChild(crop);
+  }
+
   const draft = opts.draft;
   if (draft && draft.shape === 'rect') {
     const x = Math.min(draft.x0, draft.x1);
@@ -1983,8 +2037,9 @@ function renderPageList(host, opts) {
     const badge = doc.createElement('span');
     badge.className = 'page-count';
     badge.textContent = counts[p.no] ? String(counts[p.no]) : '';
+    frame.appendChild(badge);
 
-    row.append(frame, badge);
+    row.appendChild(frame);
     row.addEventListener('click', () => onPick && onPick(p.no));
     list.appendChild(row);
   }
@@ -1998,169 +2053,6 @@ function markCurrent(host, no) {
     row.classList.toggle('is-current', Number(row.dataset.page) === no);
   }
   return no;
-}
-
-// ---- src/core/history.js ----
-// 撤销重做栈与微移合并
-// 状态：已实现。存的是"整份快照"，合并窗口内同 key 的动作只留一条。
-
-const COALESCE_MS = 600;
-
-function createHistory(initial, opts = {}) {
-  return {
-    present: initial === undefined ? null : initial,
-    past: [],
-    future: [],
-    limit: opts.limit === undefined ? 200 : opts.limit,
-    windowMs: opts.windowMs === undefined ? COALESCE_MS : opts.windowMs,
-    now: opts.now || (() => Date.now()),
-    lastKey: null,
-    lastTime: 0,
-  };
-}
-
-function current(h) {
-  return h.present;
-}
-
-// key 相同且落在合并窗口内 → 只更新 present，不再压一条历史。
-function commit(h, next, opts = {}) {
-  const key = opts.key === undefined ? null : opts.key;
-  const t = h.now();
-  const merge = key !== null && key === h.lastKey && t - h.lastTime <= h.windowMs && h.past.length > 0;
-
-  if (!merge) {
-    h.past.push(h.present);
-    if (h.past.length > h.limit) h.past.shift();
-  }
-  h.present = next;
-  h.lastKey = key;
-  h.lastTime = t;
-  h.future.length = 0;
-  return next;
-}
-
-function undo(h) {
-  if (h.past.length === 0) return null;
-  h.future.push(h.present);
-  h.present = h.past.pop();
-  h.lastKey = null;
-  return h.present;
-}
-
-function redo(h) {
-  if (h.future.length === 0) return null;
-  h.past.push(h.present);
-  h.present = h.future.pop();
-  h.lastKey = null;
-  return h.present;
-}
-
-function canUndo(h) {
-  return h.past.length > 0;
-}
-
-function canRedo(h) {
-  return h.future.length > 0;
-}
-
-// ---- src/pdf/document.js ----
-// 打开 PDF、页数、页尺寸
-// 状态：已实现。pdf.js 由 index.html 以 classic script 外部引入，本模块只包一层。
-
-
-
-async function openDocument(source, opts = {}) {
-  const lib = opts.lib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
-  if (!lib) throw figcutError('no-pdfjs', 'pdf.js 没加载（vendor/pdfjs/pdf.min.js）');
-
-  if (opts.workerSrc) lib.GlobalWorkerOptions.workerSrc = opts.workerSrc;
-
-  const task = lib.getDocument(source);
-  const pdf = await task.promise;
-  return {
-    pdf,
-    id: opts.id || 'doc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
-    pages: pdf.numPages,
-  };
-}
-
-function pageCount(doc) {
-  return doc.pages;
-}
-
-async function pageSize(doc, pageNo) {
-  const page = await doc.pdf.getPage(pageNo);
-  const vp = page.getViewport({ scale: 1 });
-  return { w: vp.width, h: vp.height, rotation: vp.rotation };
-}
-
-// ---- src/app/open.js ----
-// 打开文件与拖放
-// 状态：已实现。
-
-
-
-
-const WORKER_SRC = 'vendor/pdfjs/pdf.worker.min.js';
-
-async function openFile(file, opts = {}) {
-  if (!file) throw figcutError('no-file', '没有文件');
-  const buffer = await file.arrayBuffer();
-  return openDocument(
-    { data: new Uint8Array(buffer) },
-    { workerSrc: opts.workerSrc || WORKER_SRC, id: file.name + '|' + file.size }
-  );
-}
-
-// 拖放：只认第一个 PDF，一次只处理一个文件。
-function acceptDrop(element, onFile) {
-  const stop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  const over = (e) => {
-    stop(e);
-    element.classList.add('is-dragover');
-  };
-  const leave = (e) => {
-    stop(e);
-    element.classList.remove('is-dragover');
-  };
-  const drop = (e) => {
-    stop(e);
-    element.classList.remove('is-dragover');
-    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) onFile(file);
-  };
-  element.addEventListener('dragenter', over);
-  element.addEventListener('dragover', over);
-  element.addEventListener('dragleave', leave);
-  element.addEventListener('drop', drop);
-  return () => {
-    element.removeEventListener('dragenter', over);
-    element.removeEventListener('dragover', over);
-    element.removeEventListener('dragleave', leave);
-    element.removeEventListener('drop', drop);
-  };
-}
-
-// 系统文件选择框
-function pickFile() {
-  return new Promise((resolve) => {
-    if (typeof document === 'undefined') return resolve(null);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/pdf,.pdf';
-    input.style.display = 'none';
-    document.body.appendChild(input);
-    input.addEventListener('change', () => {
-      const file = input.files && input.files[0];
-      input.remove();
-      resolve(file || null);
-    });
-    input.click();
-  });
 }
 
 // ---- src/pdf/ink.js ----
@@ -2528,6 +2420,169 @@ function findLabelSpot(mask, labelRect, candidates) {
     if (clear) return { x: c.x, y: c.y };
   }
   return null;
+}
+
+// ---- src/core/history.js ----
+// 撤销重做栈与微移合并
+// 状态：已实现。存的是"整份快照"，合并窗口内同 key 的动作只留一条。
+
+const COALESCE_MS = 600;
+
+function createHistory(initial, opts = {}) {
+  return {
+    present: initial === undefined ? null : initial,
+    past: [],
+    future: [],
+    limit: opts.limit === undefined ? 200 : opts.limit,
+    windowMs: opts.windowMs === undefined ? COALESCE_MS : opts.windowMs,
+    now: opts.now || (() => Date.now()),
+    lastKey: null,
+    lastTime: 0,
+  };
+}
+
+function current(h) {
+  return h.present;
+}
+
+// key 相同且落在合并窗口内 → 只更新 present，不再压一条历史。
+function commit(h, next, opts = {}) {
+  const key = opts.key === undefined ? null : opts.key;
+  const t = h.now();
+  const merge = key !== null && key === h.lastKey && t - h.lastTime <= h.windowMs && h.past.length > 0;
+
+  if (!merge) {
+    h.past.push(h.present);
+    if (h.past.length > h.limit) h.past.shift();
+  }
+  h.present = next;
+  h.lastKey = key;
+  h.lastTime = t;
+  h.future.length = 0;
+  return next;
+}
+
+function undo(h) {
+  if (h.past.length === 0) return null;
+  h.future.push(h.present);
+  h.present = h.past.pop();
+  h.lastKey = null;
+  return h.present;
+}
+
+function redo(h) {
+  if (h.future.length === 0) return null;
+  h.past.push(h.present);
+  h.present = h.future.pop();
+  h.lastKey = null;
+  return h.present;
+}
+
+function canUndo(h) {
+  return h.past.length > 0;
+}
+
+function canRedo(h) {
+  return h.future.length > 0;
+}
+
+// ---- src/pdf/document.js ----
+// 打开 PDF、页数、页尺寸
+// 状态：已实现。pdf.js 由 index.html 以 classic script 外部引入，本模块只包一层。
+
+
+
+async function openDocument(source, opts = {}) {
+  const lib = opts.lib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+  if (!lib) throw figcutError('no-pdfjs', 'pdf.js 没加载（vendor/pdfjs/pdf.min.js）');
+
+  if (opts.workerSrc) lib.GlobalWorkerOptions.workerSrc = opts.workerSrc;
+
+  const task = lib.getDocument(source);
+  const pdf = await task.promise;
+  return {
+    pdf,
+    id: opts.id || 'doc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+    pages: pdf.numPages,
+  };
+}
+
+function pageCount(doc) {
+  return doc.pages;
+}
+
+async function pageSize(doc, pageNo) {
+  const page = await doc.pdf.getPage(pageNo);
+  const vp = page.getViewport({ scale: 1 });
+  return { w: vp.width, h: vp.height, rotation: vp.rotation };
+}
+
+// ---- src/app/open.js ----
+// 打开文件与拖放
+// 状态：已实现。
+
+
+
+
+const WORKER_SRC = 'vendor/pdfjs/pdf.worker.min.js';
+
+async function openFile(file, opts = {}) {
+  if (!file) throw figcutError('no-file', '没有文件');
+  const buffer = await file.arrayBuffer();
+  return openDocument(
+    { data: new Uint8Array(buffer) },
+    { workerSrc: opts.workerSrc || WORKER_SRC, id: file.name + '|' + file.size }
+  );
+}
+
+// 拖放：只认第一个 PDF，一次只处理一个文件。
+function acceptDrop(element, onFile) {
+  const stop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const over = (e) => {
+    stop(e);
+    element.classList.add('is-dragover');
+  };
+  const leave = (e) => {
+    stop(e);
+    element.classList.remove('is-dragover');
+  };
+  const drop = (e) => {
+    stop(e);
+    element.classList.remove('is-dragover');
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) onFile(file);
+  };
+  element.addEventListener('dragenter', over);
+  element.addEventListener('dragover', over);
+  element.addEventListener('dragleave', leave);
+  element.addEventListener('drop', drop);
+  return () => {
+    element.removeEventListener('dragenter', over);
+    element.removeEventListener('dragover', over);
+    element.removeEventListener('dragleave', leave);
+    element.removeEventListener('drop', drop);
+  };
+}
+
+// 系统文件选择框
+function pickFile() {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') return resolve(null);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,.pdf';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.remove();
+      resolve(file || null);
+    });
+    input.click();
+  });
 }
 
 // ---- src/core/checksum.js ----
@@ -2989,8 +3044,8 @@ async function exportZip(input) {
     const pageSize = page.getViewport({ scale: 1 });
 
     for (const item of plan.filter((p) => p.page === pageNo)) {
-      // 框内非白像素的外接框 + 每边 margin（v2 语义）
-      const inkBox = computeExportBox(mask, item.box);
+      // 优先用画完就量好的缩紧框（v2 的 r.ink），没有才现算
+      const inkBox = item.region.ink || computeExportBox(mask, item.box);
       if (!inkBox) continue;
       const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
       const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
@@ -3323,6 +3378,9 @@ function banner(message, opts = {}) {
 
 
 
+
+
+
 function boot(opts = {}) {
   const shell = createShell();
   const zoom = createZoom({ scale: 1 });
@@ -3464,6 +3522,7 @@ function boot(opts = {}) {
       ed.selectedId = null;
     } else {
       ed.selectedId = region.id;
+      if (!region.ink) measureRegion(region);
       if (region.page !== ed.page) setPage(ed, region.page);
       ed.pageW = overlays.get(region.page) ? overlays.get(region.page).size.w : ed.pageW;
       ed.pageH = overlays.get(region.page) ? overlays.get(region.page).size.h : ed.pageH;
@@ -3471,6 +3530,30 @@ function boot(opts = {}) {
       if (wrap && wrap.wrap.scrollIntoView) wrap.wrap.scrollIntoView({ block: 'nearest' });
     }
     refresh();
+  }
+
+  // ---- 缩紧：画完/改完立刻量出导出框（2px/pt 掩膜，一页缓存一份） ----
+  const maskCache = new Map();
+
+  async function pageMask(pageNo) {
+    if (maskCache.has(pageNo)) return maskCache.get(pageNo);
+    const p = stack.pages.find((x) => x.no === pageNo);
+    if (!p) return null;
+    const canvas = await renderPage(p.page, { scale: 2, dpr: 1 });
+    const img = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const mask = buildInkMask(img, { pxPerPt: 2 });
+    maskCache.set(pageNo, mask);
+    return mask;
+  }
+
+  async function measureRegion(region) {
+    if (!region) return;
+    const mask = await pageMask(region.page);
+    if (!mask) return;
+    const shape = region.shape === 'poly' ? region.points : region.rect;
+    const box = computeExportBox(mask, shape);
+    region.ink = box || null;
+    render();
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
@@ -3738,7 +3821,10 @@ function boot(opts = {}) {
     if (!hit) return;
     const before = snapshot();
     pointerUp(ed, hit.pt);
-    if (snapshot() !== before) record(null);
+    if (snapshot() !== before) {
+      record(null);
+      measureRegion(ed.regions.find((r) => r.id === ed.selectedId));
+    }
     render();
   });
 
@@ -3803,7 +3889,11 @@ function boot(opts = {}) {
     },
     'region.nudge': (ev) => {
       const v = nudgeVector(ev);
-      if (nudge(ed, v.dx, v.dy)) { record('nudge'); render(); }
+      if (nudge(ed, v.dx, v.dy)) {
+        record('nudge');
+        measureRegion(ed.regions.find((r) => r.id === ed.selectedId));
+        render();
+      }
     },
     'view.continuous': () => stack.applyLayout({ continuous: !stack.view.continuous }),
     'view.dual': () => stack.applyLayout({ dual: !stack.view.dual }),
@@ -3831,6 +3921,8 @@ function boot(opts = {}) {
     const py = ev.clientY - box.top;
     const from = zoom.scale;
     setScale(zoom, from * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+    stack.setVisualScale(zoom.scale);
+    stack.scheduleZoom();
     const next = anchorAt({ x: root.scrollLeft, y: root.scrollTop }, px, py, from, zoom.scale);
     root.scrollLeft = next.x;
     root.scrollTop = next.y;
@@ -3894,7 +3986,10 @@ function boot(opts = {}) {
 
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
-  subscribe(zoom, () => stack.applyZoom());
+  subscribe(zoom, () => {
+    stack.setVisualScale(zoom.scale);
+    stack.scheduleZoom();
+  });
 
   // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
   const LAYOUT_KEY = 'figcut.layout';

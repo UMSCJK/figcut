@@ -66,8 +66,8 @@ export async function exportZip(input) {
     const pageSize = page.getViewport({ scale: 1 });
 
     for (const item of plan.filter((p) => p.page === pageNo)) {
-      // 框内非白像素的外接框 + 每边 margin（v2 语义）
-      const inkBox = computeExportBox(mask, item.box);
+      // 优先用画完就量好的缩紧框（v2 的 r.ink），没有才现算
+      const inkBox = item.region.ink || computeExportBox(mask, item.box);
       if (!inkBox) continue;
       const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
       const crop = cropRect(withM, pageSize.width, pageSize.height, scale);

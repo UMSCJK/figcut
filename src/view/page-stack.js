@@ -24,6 +24,28 @@ export function createPageStack(opts) {
   // 视图状态：单/双页、奇偶、连续/分页
   const view = { dual: false, oddLeft: false, continuous: true };
 
+  // 缩放立刻给视觉反馈（CSS transform），真正的重绘防抖，避免 trackpad 缩放时闪
+  let visualScale = null;
+  function setVisualScale(scale) {
+    const base = pages.find((p) => p.renderedScale)?.renderedScale;
+    if (!base) return;
+    visualScale = scale;
+    const k = scale / base;
+    for (const p of pages) {
+      p.wrap.style.transformOrigin = '0 0';
+      p.wrap.style.transform = Math.abs(k - 1) < 0.002 ? '' : 'scale(' + k + ')';
+    }
+  }
+
+  let renderTimer = null;
+  function scheduleZoom() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      busy = busy.then(applyZoom);
+    }, 140);
+  }
+
   async function applyZoom() {
     if (!pdfDoc) return;
     const my = ++token;
@@ -33,6 +55,8 @@ export function createPageStack(opts) {
     for (const p of pages) {
       if (my !== token) return;
       const vp = p.page.getViewport({ scale });
+      p.wrap.style.transform = '';
+      p.renderedScale = scale;
       p.canvas.style.width = Math.round(vp.width) + 'px';
       p.canvas.style.height = Math.round(vp.height) + 'px';
       p.overlay.style.width = Math.round(vp.width) + 'px';
@@ -143,6 +167,8 @@ export function createPageStack(opts) {
       busy = busy.then(applyZoom);
       return busy;
     },
+    setVisualScale,
+    scheduleZoom,
     get current() {
       return current;
     },

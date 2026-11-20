@@ -42,8 +42,9 @@ export function renderPageList(host, opts) {
     const badge = doc.createElement('span');
     badge.className = 'page-count';
     badge.textContent = counts[p.no] ? String(counts[p.no]) : '';
+    frame.appendChild(badge);
 
-    row.append(frame, badge);
+    row.appendChild(frame);
     row.addEventListener('click', () => onPick && onPick(p.no));
     list.appendChild(row);
   }

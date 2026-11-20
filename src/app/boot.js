@@ -14,6 +14,9 @@ import { createPreview, renderPreview } from '../ui/preview.js';
 import { renderRegions } from '../ui/region-list.js';
 import { renderPageList } from '../ui/page-list.js';
 import { boundsOf } from '../view/editor.js';
+import { renderPage } from '../pdf/bitmap.js';
+import { buildInkMask } from '../pdf/ink.js';
+import { computeExportBox } from '../core/whitemargin.js';
 import {
   createEditor,
   setTool,
@@ -177,6 +180,7 @@ export function boot(opts = {}) {
       ed.selectedId = null;
     } else {
       ed.selectedId = region.id;
+      if (!region.ink) measureRegion(region);
       if (region.page !== ed.page) setPage(ed, region.page);
       ed.pageW = overlays.get(region.page) ? overlays.get(region.page).size.w : ed.pageW;
       ed.pageH = overlays.get(region.page) ? overlays.get(region.page).size.h : ed.pageH;
@@ -184,6 +188,30 @@ export function boot(opts = {}) {
       if (wrap && wrap.wrap.scrollIntoView) wrap.wrap.scrollIntoView({ block: 'nearest' });
     }
     refresh();
+  }
+
+  // ---- 缩紧：画完/改完立刻量出导出框（2px/pt 掩膜，一页缓存一份） ----
+  const maskCache = new Map();
+
+  async function pageMask(pageNo) {
+    if (maskCache.has(pageNo)) return maskCache.get(pageNo);
+    const p = stack.pages.find((x) => x.no === pageNo);
+    if (!p) return null;
+    const canvas = await renderPage(p.page, { scale: 2, dpr: 1 });
+    const img = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const mask = buildInkMask(img, { pxPerPt: 2 });
+    maskCache.set(pageNo, mask);
+    return mask;
+  }
+
+  async function measureRegion(region) {
+    if (!region) return;
+    const mask = await pageMask(region.page);
+    if (!mask) return;
+    const shape = region.shape === 'poly' ? region.points : region.rect;
+    const box = computeExportBox(mask, shape);
+    region.ink = box || null;
+    render();
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
@@ -451,7 +479,10 @@ export function boot(opts = {}) {
     if (!hit) return;
     const before = snapshot();
     pointerUp(ed, hit.pt);
-    if (snapshot() !== before) record(null);
+    if (snapshot() !== before) {
+      record(null);
+      measureRegion(ed.regions.find((r) => r.id === ed.selectedId));
+    }
     render();
   });
 
@@ -516,7 +547,11 @@ export function boot(opts = {}) {
     },
     'region.nudge': (ev) => {
       const v = nudgeVector(ev);
-      if (nudge(ed, v.dx, v.dy)) { record('nudge'); render(); }
+      if (nudge(ed, v.dx, v.dy)) {
+        record('nudge');
+        measureRegion(ed.regions.find((r) => r.id === ed.selectedId));
+        render();
+      }
     },
     'view.continuous': () => stack.applyLayout({ continuous: !stack.view.continuous }),
     'view.dual': () => stack.applyLayout({ dual: !stack.view.dual }),
@@ -544,6 +579,8 @@ export function boot(opts = {}) {
     const py = ev.clientY - box.top;
     const from = zoom.scale;
     setScale(zoom, from * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+    stack.setVisualScale(zoom.scale);
+    stack.scheduleZoom();
     const next = anchorAt({ x: root.scrollLeft, y: root.scrollTop }, px, py, from, zoom.scale);
     root.scrollLeft = next.x;
     root.scrollTop = next.y;
@@ -607,7 +644,10 @@ export function boot(opts = {}) {
 
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
-  subscribe(zoom, () => stack.applyZoom());
+  subscribe(zoom, () => {
+    stack.setVisualScale(zoom.scale);
+    stack.scheduleZoom();
+  });
 
   // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
   const LAYOUT_KEY = 'figcut.layout';

@@ -192,6 +192,14 @@ button { cursor: pointer; }
   stroke-dasharray: 4 3;
 }
 
+.cropbox {
+  fill: none;
+  stroke: var(--ink-box);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
 .handle {
   fill: #ffffff;
   stroke: var(--accent);
@@ -336,10 +344,11 @@ button { cursor: pointer; }
 .page-no { font-variant-numeric: tabular-nums; }
 
 .page-count {
-  flex: none;
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
   min-width: 16px;
   height: 16px;
-  margin-top: 2px;
   padding: 0 4px;
   border-radius: 8px;
   background: var(--accent);
@@ -349,7 +358,13 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
 }
+
+.page-item:hover .page-count,
+.page-item:focus-visible .page-count,
+.page-item.is-current .page-count { opacity: 1; }
 
 .page-count:empty { display: none; }
 
@@ -478,4 +493,5 @@ button { cursor: pointer; }
 /* ---------- PDF 预览反相：只反相纸面 ---------- */
 
 :root[data-pdf-invert="1"] .page canvas,
+:root[data-pdf-invert="1"] .page-thumb,
 :root[data-pdf-invert="1"] .preview-canvas { filter: invert(1); }
