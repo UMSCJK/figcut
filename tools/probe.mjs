@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import { buildInkMask, components } from '../src/pdf/ink.js';
 import { computeExportBox, isWhiteRow, isWhiteCol } from '../src/core/whitemargin.js';
+import { parseWordBoxes, textBoxesOnPage } from '../src/pdf/textlayer.js';
 import { pxForDpi } from '../src/core/units.js';
 
 function arg(name, def) {
@@ -62,11 +63,27 @@ const describe = (c) => ({
 });
 
 const rectArg = arg('rect', null);
+const dump = process.argv.includes('--dump');
 const rect = rectArg
   ? (() => { const [x, y, rw, rh] = rectArg.split(',').map(Number); return { x, y, w: rw, h: rh }; })()
   : comps[0] && describe(comps[0]);
 
-const box = computeExportBox(mask, rect, { maxShift: 12 });
+if (dump) {
+  const hit = comps
+    .filter((c) => {
+      const cx0 = c.minX / ppp, cy0 = c.minY / ppp;
+      const cx1 = (c.maxX + 1) / ppp, cy1 = (c.maxY + 1) / ppp;
+      return cx0 < rect.x + rect.w && cx1 > rect.x && cy0 < rect.y + rect.h && cy1 > rect.y;
+    })
+    .sort((a, b) => b.total - a.total);
+  console.log(JSON.stringify({ rect, count: hit.length, comps: hit.slice(0, 40).map(describe) }, null, 2));
+  process.exit(0);
+}
+
+const textPath = arg('text', null);
+const words = textPath ? parseWordBoxes(fs.readFileSync(textPath, 'utf8')) : [];
+const textRects = textBoxesOnPage(words, rect);
+const box = computeExportBox(mask, rect, { maxShift: 12, textRects });
 const x0 = Math.round(box.x * ppp);
 const y0 = Math.round(box.y * ppp);
 const x1 = Math.round((box.x + box.w) * ppp) - 1;
@@ -87,6 +104,8 @@ const out = {
   inkRatio: +(ink / mask.data.length).toFixed(4),
   components: comps.length,
   biggest: comps.slice(0, topN).map(describe),
+  wordsOnPage: words.length,
+  wordsInRect: textRects.length,
   rect,
   exportBox: { x: +box.x.toFixed(2), y: +box.y.toFixed(2), w: +box.w.toFixed(2), h: +box.h.toFixed(2) },
   edgesWhite: edges,

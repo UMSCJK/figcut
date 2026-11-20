@@ -314,7 +314,55 @@ export function findLabelSpot(mask, labelRect, candidates) {
   return null;
 }
 
-// 导出框：先按笔画归属定框，再把四边推到纯白。
+// 框内笔画的并集：只算"大部分落在框里"的笔画，整根纳入，擦到的不算。
+// 没有笔画时返回 null（调用方退回手画框）。
+export function inkBounds(mask, rect, opts = {}) {
+  const pad = opts.pad === undefined ? 24 : opts.pad;
+  const comps = componentsNear(mask, rect, pad);
+  let l = Infinity;
+  let t = Infinity;
+  let r = -Infinity;
+  let b = -Infinity;
+  let hit = 0;
+
+  for (const c of comps) {
+    const x1 = Math.min(c.maxX, Math.floor(rect.x + rect.w) - 1);
+    const y1 = Math.min(c.maxY, Math.floor(rect.y + rect.h) - 1);
+    let inside = 0;
+    for (let y = Math.max(c.minY, Math.ceil(rect.y)); y <= y1; y += 1) {
+      for (let x = Math.max(c.minX, Math.ceil(rect.x)); x <= x1; x += 1) {
+        inside += ink(mask, x, y);
+      }
+    }
+    if (inside === 0) continue;
+    if (inside < c.total - inside) continue; // 大部分在框外：只是擦到，不要
+    hit += 1;
+    l = Math.min(l, c.minX);
+    t = Math.min(t, c.minY);
+    r = Math.max(r, c.maxX + 1);
+    b = Math.max(b, c.maxY + 1);
+  }
+
+  if (hit === 0) return null;
+  return { x: l, y: t, w: r - l, h: b - t };
+}
+
+// 文字不算笔画：把文字区域从掩膜里挖掉（在副本上做，不动调用方的掩膜）。
+function maskWithoutText(mask, textRects) {
+  const data = Uint8Array.from(mask.data);
+  for (const t of textRects) {
+    const x0 = Math.max(0, Math.floor(t.x) - 1);
+    const y0 = Math.max(0, Math.floor(t.y) - 1);
+    const x1 = Math.min(mask.w, Math.ceil(t.x + t.w) + 1);
+    const y1 = Math.min(mask.h, Math.ceil(t.y + t.h) + 1);
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = x0; x < x1; x += 1) data[y * mask.w + x] = 0;
+    }
+  }
+  return { w: mask.w, h: mask.h, pxPerPt: mask.pxPerPt, data };
+}
+
+// 导出框：文字先挖掉，笔画并集定框，再把四边推到纯白。
 export function computeExportBox(mask, rectPt, opts = {}) {
   const rect = {
     x: toPx(mask, rectPt.x),
@@ -322,8 +370,21 @@ export function computeExportBox(mask, rectPt, opts = {}) {
     w: Math.max(1, toPx(mask, rectPt.w)),
     h: Math.max(1, toPx(mask, rectPt.h)),
   };
-  let box = growToStroke(mask, rect, opts);
-  box = snapToWhite(mask, box, opts);
+  let work = mask;
+  if (opts.textRects && opts.textRects.length > 0) {
+    work = maskWithoutText(
+      mask,
+      opts.textRects.map((t) => ({
+        x: t.x * mask.pxPerPt,
+        y: t.y * mask.pxPerPt,
+        w: t.w * mask.pxPerPt,
+        h: t.h * mask.pxPerPt,
+      }))
+    );
+  }
+
+  let box = inkBounds(work, rect, opts) || growToStroke(work, rect, opts);
+  box = snapToWhite(work, box, opts);
   return {
     x: toPt(mask, box.x),
     y: toPt(mask, box.y),
