@@ -15,6 +15,7 @@ function openDb() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains('bytes')) db.createObjectStore('bytes');
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -23,6 +24,45 @@ function openDb() {
 
 export function handleKey(name, size) {
   return String(name) + '|' + Number(size);
+}
+
+const BYTES_STORE = 'bytes';
+const MAX_CACHED_BYTES = 40 * 1024 * 1024;
+
+// 把 PDF 原字节缓存下来：浏览器不给文件句柄时（比如 file:// 打开），
+// 最近文件仍然能直接打开，不用再弹选择框。
+export async function cacheBytes(name, size, bytes) {
+  if (!hasIdb() || !bytes || bytes.byteLength > MAX_CACHED_BYTES) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(BYTES_STORE, 'readwrite');
+      tx.objectStore(BYTES_STORE).put(bytes, handleKey(name, size));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function readCachedBytes(name, size) {
+  if (!hasIdb()) return null;
+  try {
+    const db = await openDb();
+    const bytes = await new Promise((resolve, reject) => {
+      const tx = db.transaction(BYTES_STORE, 'readonly');
+      const req = tx.objectStore(BYTES_STORE).get(handleKey(name, size));
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return bytes || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function saveHandle(name, size, handle) {
@@ -75,6 +115,21 @@ export async function reopenRecent(entry) {
   } catch (e) {
     return null;
   }
+}
+
+// 依次尝试：句柄 → 本地缓存字节；都没有才返回 null
+export async function openRecent(entry) {
+  const viaHandle = await reopenRecent(entry);
+  if (viaHandle) return viaHandle;
+  const bytes = await readCachedBytes(entry.name, entry.size);
+  if (bytes) {
+    try {
+      return new File([bytes], entry.name, { type: 'application/pdf' });
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function hasPickHandle() {

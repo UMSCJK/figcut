@@ -36,7 +36,7 @@ import {
 } from '../view/editor.js';
 import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
-import { pickWithHandle, saveHandle, reopenRecent, hasPickHandle } from '../io/filehandles.js';
+import { pickWithHandle, saveHandle, openRecent, cacheBytes, hasPickHandle } from '../io/filehandles.js';
 import { exportZip } from '../app/export-zip.js';
 import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
 import { createTheme, cycleUi, cyclePdfPreview, applyTheme, loadTheme, saveTheme, isInverted } from '../ui/theme.js';
@@ -392,7 +392,14 @@ export function boot(opts = {}) {
     });
   }
 
+  function clampScrollX() {
+    const root = stack.root;
+    const max = Math.max(0, root.scrollWidth - root.clientWidth);
+    if (root.scrollLeft > max + 1) root.scrollLeft = max;
+  }
+
   function render() {
+    clampScrollX();
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
         selectedId: page === ed.page ? ed.selectedId : null,
@@ -895,6 +902,10 @@ export function boot(opts = {}) {
         saveHandle(file.name, file.size, pendingHandle);
         pendingHandle = null;
       }
+      // 顺手缓存原字节，下次不依赖句柄权限
+      if (file && file.arrayBuffer) {
+        file.arrayBuffer().then((buf) => cacheBytes(file.name, file.size, buf)).catch(() => {});
+      }
       state = 'ready';
     } catch (e) {
       state = 'error';
@@ -977,12 +988,13 @@ export function boot(opts = {}) {
 
       btn.append(name, meta);
       btn.addEventListener('click', async () => {
-        // 有句柄就直接开，没有才退回选择框
-        const direct = await reopenRecent(item);
+        // 句柄或缓存字节都能直接开；都没有才让用户再选一次
+        const direct = await openRecent(item);
         if (direct) {
           load(direct);
           return;
         }
+        toast('这一份需要重新选择一次（浏览器不允许静默读取）');
         const file = await chooseFile();
         if (file) load(file);
       });

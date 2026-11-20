@@ -28,14 +28,12 @@ export function createPageStack(opts) {
   let visualScale = null;
   function setVisualScale(scale) {
     visualScale = scale;
-    // 直接改 canvas 的 CSS 尺寸：浏览器做一次便宜的位图拉伸，
-    // 比 transform 把每张位图重新栅格化快得多
+    // 改 .page 的尺寸（canvas 是 100% 填充）：布局立刻稳定，
+    // 位图由浏览器拉伸，比 transform 重新栅格化便宜得多
     for (const p of pages) {
       const vp = p.page.getViewport({ scale });
-      p.canvas.style.width = Math.round(vp.width) + 'px';
-      p.canvas.style.height = Math.round(vp.height) + 'px';
-      p.overlay.style.width = Math.round(vp.width) + 'px';
-      p.overlay.style.height = Math.round(vp.height) + 'px';
+      p.wrap.style.width = Math.round(vp.width) + 'px';
+      p.wrap.style.height = Math.round(vp.height) + 'px';
     }
   }
 
@@ -103,12 +101,10 @@ export function createPageStack(opts) {
       // 只画视口附近的页；远处的先留着旧位图，等滚回来再补（滚动手势里会再触发）
       if (!near(p) && p.renderedScale) continue;
       const vp = p.page.getViewport({ scale });
-      p.wrap.style.transform = '';
       p.renderedScale = scale;
-      p.canvas.style.width = Math.round(vp.width) + 'px';
-      p.canvas.style.height = Math.round(vp.height) + 'px';
-      p.overlay.style.width = Math.round(vp.width) + 'px';
-      p.overlay.style.height = Math.round(vp.height) + 'px';
+      // 尺寸挂在 .page 上，canvas 用 100% 撑满，布局立刻正确
+      p.wrap.style.width = Math.round(vp.width) + 'px';
+      p.wrap.style.height = Math.round(vp.height) + 'px';
       await renderPage(p.page, { scale, dpr, canvas: p.canvas });
       await buildTextLayer(p, scale);
     }

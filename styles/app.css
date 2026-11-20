@@ -178,7 +178,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   display: grid;
   grid-template-columns: auto auto;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: safe center;
   gap: 20px;
   max-width: 100%;
 }

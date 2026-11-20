@@ -249,7 +249,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   display: grid;
   grid-template-columns: auto auto;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: safe center;
   gap: 20px;
   max-width: 100%;
 }
@@ -1454,10 +1454,10 @@ function renderZoomControl(opts) {
         btn.textContent = pct(v);
         btn.classList.toggle('on', !z.auto && z.mode === 'free' && Math.abs(z.scale - v) < 1e-6);
       } else if (action === 'fit-page') {
-        btn.textContent = '整页';
+        btn.textContent = fits.page ? '整页 ' + pct(fits.page) : '整页';
         btn.classList.toggle('on', z.mode === 'page');
       } else {
-        btn.textContent = '页宽';
+        btn.textContent = fits.width ? '页宽 ' + pct(fits.width) : '页宽';
         btn.classList.toggle('on', z.mode === 'width');
       }
     }
@@ -1561,14 +1561,12 @@ function createPageStack(opts) {
   let visualScale = null;
   function setVisualScale(scale) {
     visualScale = scale;
-    // 直接改 canvas 的 CSS 尺寸：浏览器做一次便宜的位图拉伸，
-    // 比 transform 把每张位图重新栅格化快得多
+    // 改 .page 的尺寸（canvas 是 100% 填充）：布局立刻稳定，
+    // 位图由浏览器拉伸，比 transform 重新栅格化便宜得多
     for (const p of pages) {
       const vp = p.page.getViewport({ scale });
-      p.canvas.style.width = Math.round(vp.width) + 'px';
-      p.canvas.style.height = Math.round(vp.height) + 'px';
-      p.overlay.style.width = Math.round(vp.width) + 'px';
-      p.overlay.style.height = Math.round(vp.height) + 'px';
+      p.wrap.style.width = Math.round(vp.width) + 'px';
+      p.wrap.style.height = Math.round(vp.height) + 'px';
     }
   }
 
@@ -1636,12 +1634,10 @@ function createPageStack(opts) {
       // 只画视口附近的页；远处的先留着旧位图，等滚回来再补（滚动手势里会再触发）
       if (!near(p) && p.renderedScale) continue;
       const vp = p.page.getViewport({ scale });
-      p.wrap.style.transform = '';
       p.renderedScale = scale;
-      p.canvas.style.width = Math.round(vp.width) + 'px';
-      p.canvas.style.height = Math.round(vp.height) + 'px';
-      p.overlay.style.width = Math.round(vp.width) + 'px';
-      p.overlay.style.height = Math.round(vp.height) + 'px';
+      // 尺寸挂在 .page 上，canvas 用 100% 撑满，布局立刻正确
+      p.wrap.style.width = Math.round(vp.width) + 'px';
+      p.wrap.style.height = Math.round(vp.height) + 'px';
       await renderPage(p.page, { scale, dpr, canvas: p.canvas });
       await buildTextLayer(p, scale);
     }
@@ -3297,6 +3293,7 @@ function openDb() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains('bytes')) db.createObjectStore('bytes');
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -3305,6 +3302,45 @@ function openDb() {
 
 function handleKey(name, size) {
   return String(name) + '|' + Number(size);
+}
+
+const BYTES_STORE = 'bytes';
+const MAX_CACHED_BYTES = 40 * 1024 * 1024;
+
+// 把 PDF 原字节缓存下来：浏览器不给文件句柄时（比如 file:// 打开），
+// 最近文件仍然能直接打开，不用再弹选择框。
+async function cacheBytes(name, size, bytes) {
+  if (!hasIdb() || !bytes || bytes.byteLength > MAX_CACHED_BYTES) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(BYTES_STORE, 'readwrite');
+      tx.objectStore(BYTES_STORE).put(bytes, handleKey(name, size));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function readCachedBytes(name, size) {
+  if (!hasIdb()) return null;
+  try {
+    const db = await openDb();
+    const bytes = await new Promise((resolve, reject) => {
+      const tx = db.transaction(BYTES_STORE, 'readonly');
+      const req = tx.objectStore(BYTES_STORE).get(handleKey(name, size));
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return bytes || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function saveHandle(name, size, handle) {
@@ -3357,6 +3393,21 @@ async function reopenRecent(entry) {
   } catch (e) {
     return null;
   }
+}
+
+// 依次尝试：句柄 → 本地缓存字节；都没有才返回 null
+async function openRecent(entry) {
+  const viaHandle = await reopenRecent(entry);
+  if (viaHandle) return viaHandle;
+  const bytes = await readCachedBytes(entry.name, entry.size);
+  if (bytes) {
+    try {
+      return new File([bytes], entry.name, { type: 'application/pdf' });
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
 }
 
 function hasPickHandle() {
@@ -4549,7 +4600,14 @@ function boot(opts = {}) {
     });
   }
 
+  function clampScrollX() {
+    const root = stack.root;
+    const max = Math.max(0, root.scrollWidth - root.clientWidth);
+    if (root.scrollLeft > max + 1) root.scrollLeft = max;
+  }
+
   function render() {
+    clampScrollX();
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
         selectedId: page === ed.page ? ed.selectedId : null,
@@ -5052,6 +5110,10 @@ function boot(opts = {}) {
         saveHandle(file.name, file.size, pendingHandle);
         pendingHandle = null;
       }
+      // 顺手缓存原字节，下次不依赖句柄权限
+      if (file && file.arrayBuffer) {
+        file.arrayBuffer().then((buf) => cacheBytes(file.name, file.size, buf)).catch(() => {});
+      }
       state = 'ready';
     } catch (e) {
       state = 'error';
@@ -5134,12 +5196,13 @@ function boot(opts = {}) {
 
       btn.append(name, meta);
       btn.addEventListener('click', async () => {
-        // 有句柄就直接开，没有才退回选择框
-        const direct = await reopenRecent(item);
+        // 句柄或缓存字节都能直接开；都没有才让用户再选一次
+        const direct = await openRecent(item);
         if (direct) {
           load(direct);
           return;
         }
+        toast('这一份需要重新选择一次（浏览器不允许静默读取）');
         const file = await chooseFile();
         if (file) load(file);
       });
