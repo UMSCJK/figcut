@@ -16,7 +16,7 @@ export function renderPageList(host, opts) {
   if (old) old.remove();
 
   const list = doc.createElement('div');
-  list.className = 'page-list';
+  list.className = 'page-list' + (opts.cols === 2 ? ' is-double' : '');
 
   for (const p of pages) {
     const row = doc.createElement('button');

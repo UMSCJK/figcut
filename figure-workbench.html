@@ -194,7 +194,7 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .sidebar { border-right: 1px solid var(--line); }
 .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
 
-.sidebar.is-collapsed, .panel.is-collapsed { display: none; }
+.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head { display: none; }
 
 .splitter { position: relative; cursor: col-resize; background: transparent; }
 .splitter::after {
@@ -205,6 +205,11 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
   transition: background 0.12s;
 }
 .splitter:hover::after, .splitter.is-dragging::after { background: var(--accent); opacity: 0.5; }
+
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.side-head .icon-btn { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--text-3); }
+.side-head .icon-btn:hover { background: var(--hover); color: var(--text); }
+.side-head .icon-btn:disabled { opacity: 0.35; cursor: default; }
 
 .side-head {
   padding: 9px 12px 6px;
@@ -450,7 +455,11 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 
 /* ---------- 左栏页面列表 ---------- */
 
-.page-list { padding: 2px 6px 8px; display: flex; flex-direction: column; gap: 1px; }
+.page-list { padding: 2px 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+
+.page-list.is-double { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.page-list.is-double .page-item { padding: 4px; }
+.page-list.is-double .page-no { font-size: 10px; }
 
 .page-item {
   display: flex;
@@ -736,7 +745,7 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .side-toggle.is-right { left: auto; right: 6px; }
 
 .sidebar.is-collapsed > *:not(.side-toggle),
-.panel.is-collapsed > *:not(.side-toggle) { display: none; }
+.panel.is-collapsed > *:not(.side-toggle) { display: none !important; }
 
 .sidebar.is-collapsed, .panel.is-collapsed { overflow: hidden; }
 .sidebar.is-collapsed .side-toggle, .panel.is-collapsed .side-toggle { left: 3px; bottom: 6px; }
@@ -1238,6 +1247,7 @@ const ICONS = {
   trash: wrap('<path d="M3.4 4.4h9.2"/><path d="M6.4 4.4V3.2h3.2v1.2"/><path d="M4.9 4.4l.5 8.1h5.2l.5-8.1"/>'),
   minus: wrap('<path d="M3.6 8h8.8"/>'),
   plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
+  grid: wrap('<rect x="2.6" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="0.8"/>'),
   fitWidth: wrap('<rect x="2.4" y="3.2" width="4.2" height="9.6" rx="0.6"/><path d="M9 8h4.4M11.6 5.6L13.8 8l-2.2 2.4"/>'),
   fitPage: wrap('<rect x="4" y="2.6" width="8" height="10.8" rx="0.8"/><path d="M6 5.4h4M6 8h4M6 10.6h4"/>'),
   uiAuto: wrap('<circle cx="8" cy="8" r="5.4"/><path d="M8 2.6v10.8" stroke-dasharray="1.5 1.6"/>'),
@@ -2553,7 +2563,7 @@ function renderPageList(host, opts) {
   if (old) old.remove();
 
   const list = doc.createElement('div');
-  list.className = 'page-list';
+  list.className = 'page-list' + (opts.cols === 2 ? ' is-double' : '');
 
   for (const p of pages) {
     const row = doc.createElement('button');
@@ -3979,6 +3989,7 @@ function banner(message, opts = {}) {
 
 
 
+
 function boot(opts = {}) {
   const shell = createShell();
   const zoom = createZoom({ scale: 1 });
@@ -4283,6 +4294,7 @@ function boot(opts = {}) {
         regions: ed.regions,
         onPick: (no) => goPage(no),
         thumbFor,
+        cols: layout.sideCols === 2 ? 2 : 1,
       });
     }
 
@@ -4633,12 +4645,14 @@ function boot(opts = {}) {
 
   function applyWheel() {
     wheelRaf = 0;
-    if (!wheelPoint || wheelAcc === 0 || state !== 'ready') return;
+    if (!wheelPoint || Math.abs(wheelAcc) < 10 || state !== 'ready') return;
     const root = stack.root;
     const from = zoom.scale;
-    const factor = Math.pow(1.0015, -wheelAcc);
+    const dir = wheelAcc < 0 ? 1 : -1;
     wheelAcc = 0;
-    const to = Math.min(zoom.max, Math.max(zoom.min, from * factor));
+    // 只在预设档位上跳，绝不出现 143% 这种半吊子倍率
+    const i = stepIndex(from);
+    const to = STEPS[Math.min(STEPS.length - 1, Math.max(0, i + dir))];
     if (Math.abs(to - from) < 1e-6) return;
     setScale(zoom, to);
     stack.setVisualScale(zoom.scale);
@@ -4849,6 +4863,7 @@ function boot(opts = {}) {
         layout.rightCollapsed = false;
       }
       applyLayout();
+      updateColsBtn && updateColsBtn();
       saveLayout();
     });
     const end = () => {
@@ -4868,6 +4883,34 @@ function boot(opts = {}) {
   bindSplitter(document.getElementById('split-left'), 'left');
   bindSplitter(document.getElementById('split-right'), 'right');
 
+  // 左栏单/双列：太窄时禁用
+  const sideHead = document.getElementById('side-head');
+  let colsBtn = null;
+  if (sideHead) {
+    colsBtn = doc.createElement('button');
+    colsBtn.type = 'button';
+    colsBtn.className = 'icon-btn';
+    colsBtn.innerHTML = ICONS.grid;
+    sideHead.appendChild(colsBtn);
+    colsBtn.addEventListener('click', () => {
+      if (colsBtn.disabled) return;
+      layout.sideCols = layout.sideCols === 2 ? 1 : 2;
+      saveLayout();
+      updateColsBtn();
+      lastListSig = ''; // 列表结构变了，强制重建
+      refresh();
+    });
+  }
+
+  function updateColsBtn() {
+    if (!colsBtn) return;
+    const w = shell.panelLeft.getBoundingClientRect().width;
+    const can = w >= 340;
+    colsBtn.disabled = !can;
+    colsBtn.classList.toggle('is-active', layout.sideCols === 2);
+    colsBtn.title = can ? '单列 / 双列缩略图' : '左栏拖到 340px 以上才能双列';
+  }
+
   const leftToggle = document.getElementById('toggle-left');
   if (leftToggle) {
     leftToggle.textContent = '‹';
@@ -4878,6 +4921,8 @@ function boot(opts = {}) {
       leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
     });
   }
+
+  updateColsBtn && updateColsBtn();
 
   const rightToggle = document.getElementById('toggle-right');
   if (rightToggle) {

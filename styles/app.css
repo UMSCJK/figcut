@@ -123,7 +123,7 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .sidebar { border-right: 1px solid var(--line); }
 .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
 
-.sidebar.is-collapsed, .panel.is-collapsed { display: none; }
+.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head { display: none; }
 
 .splitter { position: relative; cursor: col-resize; background: transparent; }
 .splitter::after {
@@ -134,6 +134,11 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
   transition: background 0.12s;
 }
 .splitter:hover::after, .splitter.is-dragging::after { background: var(--accent); opacity: 0.5; }
+
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.side-head .icon-btn { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--text-3); }
+.side-head .icon-btn:hover { background: var(--hover); color: var(--text); }
+.side-head .icon-btn:disabled { opacity: 0.35; cursor: default; }
 
 .side-head {
   padding: 9px 12px 6px;
@@ -379,7 +384,11 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 
 /* ---------- 左栏页面列表 ---------- */
 
-.page-list { padding: 2px 6px 8px; display: flex; flex-direction: column; gap: 1px; }
+.page-list { padding: 2px 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+
+.page-list.is-double { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.page-list.is-double .page-item { padding: 4px; }
+.page-list.is-double .page-no { font-size: 10px; }
 
 .page-item {
   display: flex;
@@ -665,7 +674,7 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .side-toggle.is-right { left: auto; right: 6px; }
 
 .sidebar.is-collapsed > *:not(.side-toggle),
-.panel.is-collapsed > *:not(.side-toggle) { display: none; }
+.panel.is-collapsed > *:not(.side-toggle) { display: none !important; }
 
 .sidebar.is-collapsed, .panel.is-collapsed { overflow: hidden; }
 .sidebar.is-collapsed .side-toggle, .panel.is-collapsed .side-toggle { left: 3px; bottom: 6px; }

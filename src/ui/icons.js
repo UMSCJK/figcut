@@ -18,6 +18,7 @@ export const ICONS = {
   trash: wrap('<path d="M3.4 4.4h9.2"/><path d="M6.4 4.4V3.2h3.2v1.2"/><path d="M4.9 4.4l.5 8.1h5.2l.5-8.1"/>'),
   minus: wrap('<path d="M3.6 8h8.8"/>'),
   plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
+  grid: wrap('<rect x="2.6" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="0.8"/>'),
   fitWidth: wrap('<rect x="2.4" y="3.2" width="4.2" height="9.6" rx="0.6"/><path d="M9 8h4.4M11.6 5.6L13.8 8l-2.2 2.4"/>'),
   fitPage: wrap('<rect x="4" y="2.6" width="8" height="10.8" rx="0.8"/><path d="M6 5.4h4M6 8h4M6 10.6h4"/>'),
   uiAuto: wrap('<circle cx="8" cy="8" r="5.4"/><path d="M8 2.6v10.8" stroke-dasharray="1.5 1.6"/>'),

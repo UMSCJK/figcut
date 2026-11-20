@@ -7,6 +7,7 @@ import { stepZoom, fitPageScale, fitWidthScale } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
 import { ICONS } from '../ui/icons.js';
+import { STEPS, stepIndex } from '../ui/zoom-control.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
 import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
@@ -347,6 +348,7 @@ export function boot(opts = {}) {
         regions: ed.regions,
         onPick: (no) => goPage(no),
         thumbFor,
+        cols: layout.sideCols === 2 ? 2 : 1,
       });
     }
 
@@ -697,12 +699,14 @@ export function boot(opts = {}) {
 
   function applyWheel() {
     wheelRaf = 0;
-    if (!wheelPoint || wheelAcc === 0 || state !== 'ready') return;
+    if (!wheelPoint || Math.abs(wheelAcc) < 10 || state !== 'ready') return;
     const root = stack.root;
     const from = zoom.scale;
-    const factor = Math.pow(1.0015, -wheelAcc);
+    const dir = wheelAcc < 0 ? 1 : -1;
     wheelAcc = 0;
-    const to = Math.min(zoom.max, Math.max(zoom.min, from * factor));
+    // 只在预设档位上跳，绝不出现 143% 这种半吊子倍率
+    const i = stepIndex(from);
+    const to = STEPS[Math.min(STEPS.length - 1, Math.max(0, i + dir))];
     if (Math.abs(to - from) < 1e-6) return;
     setScale(zoom, to);
     stack.setVisualScale(zoom.scale);
@@ -913,6 +917,7 @@ export function boot(opts = {}) {
         layout.rightCollapsed = false;
       }
       applyLayout();
+      updateColsBtn && updateColsBtn();
       saveLayout();
     });
     const end = () => {
@@ -932,6 +937,34 @@ export function boot(opts = {}) {
   bindSplitter(document.getElementById('split-left'), 'left');
   bindSplitter(document.getElementById('split-right'), 'right');
 
+  // 左栏单/双列：太窄时禁用
+  const sideHead = document.getElementById('side-head');
+  let colsBtn = null;
+  if (sideHead) {
+    colsBtn = doc.createElement('button');
+    colsBtn.type = 'button';
+    colsBtn.className = 'icon-btn';
+    colsBtn.innerHTML = ICONS.grid;
+    sideHead.appendChild(colsBtn);
+    colsBtn.addEventListener('click', () => {
+      if (colsBtn.disabled) return;
+      layout.sideCols = layout.sideCols === 2 ? 1 : 2;
+      saveLayout();
+      updateColsBtn();
+      lastListSig = ''; // 列表结构变了，强制重建
+      refresh();
+    });
+  }
+
+  function updateColsBtn() {
+    if (!colsBtn) return;
+    const w = shell.panelLeft.getBoundingClientRect().width;
+    const can = w >= 340;
+    colsBtn.disabled = !can;
+    colsBtn.classList.toggle('is-active', layout.sideCols === 2);
+    colsBtn.title = can ? '单列 / 双列缩略图' : '左栏拖到 340px 以上才能双列';
+  }
+
   const leftToggle = document.getElementById('toggle-left');
   if (leftToggle) {
     leftToggle.textContent = '‹';
@@ -942,6 +975,8 @@ export function boot(opts = {}) {
       leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
     });
   }
+
+  updateColsBtn && updateColsBtn();
 
   const rightToggle = document.getElementById('toggle-right');
   if (rightToggle) {
