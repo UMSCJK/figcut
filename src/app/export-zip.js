@@ -72,8 +72,8 @@ export async function exportZip(input) {
       const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
       const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
-      const shape = item.region.shape === 'poly' ? item.region.points : null;
-      const bytes = renderPngPx(hires, crop.px, shape ? { poly: shape, scale } : {});
+      // 不做多边形蒙版：蒙版会切断跨边的墨迹，导出必须是完整矩形图
+      const bytes = renderPngPx(hires, crop.px);
       addFile(zip, item.name, bytes);
       manifest.push({
         name: item.name,
