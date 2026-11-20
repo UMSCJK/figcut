@@ -633,7 +633,9 @@ export function boot(opts = {}) {
       return;
     }
     if (!drawing) {
-      shell.canvas.style.cursor = hoverCursor(ev);
+      const cur = hoverCursor(ev);
+      shell.canvas.style.cursor = cur;
+      stack.root.style.cursor = cur;
       // 正在画多边形/矩形（还没松手）时，鼠标移动也要实时预览
       if (ed.draft) {
         const hit = pointOf(ev);

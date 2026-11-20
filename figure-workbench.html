@@ -230,8 +230,8 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   background: var(--view);
 }
 
-.canvas[data-tool="rect"] .pages,
-.canvas[data-tool="poly"] .pages { cursor: crosshair; }
+/* 光标由 JS 按命中目标决定（手柄 pointer / 框体 move / 空白 default），
+   这里不要写死 cursor，否则会盖掉内联样式 */
 
 .pages {
   flex: 1;
@@ -865,25 +865,25 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 配色连体按钮组 */
 .seg {
   display: inline-flex;
-  height: var(--h-btn);
-  border: 1px solid var(--line-strong);
+  height: var(--ctl-h);
   border-radius: var(--r-ctl);
-  overflow: hidden;
-  background: var(--card);
 }
 
 .seg-btn {
-  width: 30px;
-  height: 100%;
-  border: 0;
-  background: transparent;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
   color: var(--text-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
 }
 
-.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn:first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); }
+.seg-btn:last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
+.seg-btn + .seg-btn { border-left: 0; }
 .seg-btn:hover { background: var(--hover); color: var(--text); }
 .seg-btn.on { background: var(--sel); color: var(--accent); }
 
@@ -4909,7 +4909,9 @@ function boot(opts = {}) {
       return;
     }
     if (!drawing) {
-      shell.canvas.style.cursor = hoverCursor(ev);
+      const cur = hoverCursor(ev);
+      shell.canvas.style.cursor = cur;
+      stack.root.style.cursor = cur;
       // 正在画多边形/矩形（还没松手）时，鼠标移动也要实时预览
       if (ed.draft) {
         const hit = pointOf(ev);
