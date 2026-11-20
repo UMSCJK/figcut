@@ -1,12 +1,44 @@
-import { test, todo, assert } from '../tools/testkit.mjs';
-import * as m from '../src/app/shortcuts.js';
+import { test, assert } from '../tools/testkit.mjs';
+import { resolveKey, nudgeVector, bindShortcuts } from '../src/app/shortcuts.js';
 
-const API = ['bindShortcuts', 'resolveKey'];
+const ev = (key, extra = {}) => ({ key, target: { tagName: 'BODY' }, ...extra });
 
-test('shortcuts: 导出签名齐备', () => {
-  for (const n of API) assert(typeof m[n] === 'function', 'shortcuts 缺少导出 ' + n);
+test('shortcuts: 基础键位', () => {
+  assert(resolveKey(ev('n')) === 'page.next');
+  assert(resolveKey(ev('p')) === 'page.prev');
+  assert(resolveKey(ev('f')) === 'zoom.fitPage');
+  assert(resolveKey(ev('w')) === 'zoom.fitWidth');
+  assert(resolveKey(ev('+')) === 'zoom.in');
+  assert(resolveKey(ev('-')) === 'zoom.out');
+  assert(resolveKey(ev('r')) === 'tool.rect');
 });
 
-// 以下是实现前必须覆盖的行为，写成 todo 而不是假绿
-todo('shortcuts: 焦点在输入框时不拦截');
-todo('shortcuts: Shift+PgDn 是跳 10 页');
+test('shortcuts: Ctrl 组合', () => {
+  assert(resolveKey(ev('z', { ctrlKey: true })) === 'history.undo');
+  assert(resolveKey(ev('y', { metaKey: true })) === 'history.redo');
+  assert(resolveKey(ev('e', { ctrlKey: true })) === 'export.zip');
+  assert(resolveKey(ev('0', { ctrlKey: true })) === 'zoom.reset');
+  assert(resolveKey(ev('End', { ctrlKey: true })) === 'page.last');
+});
+
+test('shortcuts: 焦点在输入框时只有 Esc 放行', () => {
+  const inInput = (key) => ({ key, target: { tagName: 'INPUT' }, ctrlKey: false });
+  assert(resolveKey(inInput('n')) === null, '打字母不能被拦截');
+  assert(resolveKey(inInput('z')) === null);
+  assert(resolveKey(inInput('Escape')) === 'cancel');
+});
+
+test('shortcuts: 微移方向与步长', () => {
+  assert(JSON.stringify(nudgeVector({ key: 'ArrowRight', altKey: false })) === '{"dx":1,"dy":0}');
+  assert(JSON.stringify(nudgeVector({ key: 'ArrowUp', altKey: true })) === '{"dx":0,"dy":-10}');
+});
+
+test('shortcuts: bindShortcuts 分发并 preventDefault', () => {
+  const listeners = [];
+  const target = { addEventListener: (t, fn) => listeners.push(fn), removeEventListener: () => {} };
+  let got = null;
+  let prevented = false;
+  bindShortcuts(target, { 'page.next': () => { got = 'page.next'; } });
+  listeners[0]({ key: 'n', target: { tagName: 'BODY' }, preventDefault: () => { prevented = true; } });
+  assert(got === 'page.next' && prevented);
+});

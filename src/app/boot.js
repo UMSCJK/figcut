@@ -2,7 +2,10 @@
 // 状态：已实现（打开 PDF、连续滚动、缩放、矩形/多边形标注、撤销重做）。
 
 import { createShell, setTitle, setEmpty, addButton, addButtonTo } from '../ui/shell.js';
-import { createZoom, subscribe } from '../view/zoom.js';
+import { createZoom, subscribe, setScale, setFit } from '../view/zoom.js';
+import { stepZoom } from '../core/layout.js';
+import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
+import { pageAtScroll } from '../view/navigator.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
 import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
@@ -223,12 +226,18 @@ export function boot(opts = {}) {
   toolGroup.className = 'tool-group';
   shell.canvas.appendChild(toolGroup);
 
+  const toolButtons = new Map();
+
+  function markTool(tool) {
+    for (const [name, btn] of toolButtons) btn.classList.toggle('is-active', name === tool);
+  }
+
   const toolButton = (icon, label, tool) => {
     const btn = addButtonTo(toolGroup, icon, () => {
       setTool(ed, tool);
-      for (const b of toolGroup.children) b.classList.remove('is-active');
-      btn.classList.add('is-active');
+      markTool(tool);
     }, { title: label, ariaLabel: label });
+    toolButtons.set(tool, btn);
     if (tool === ed.tool) btn.classList.add('is-active');
     return btn;
   };
@@ -287,68 +296,83 @@ export function boot(opts = {}) {
     render();
   });
 
-  document.addEventListener('keydown', (ev) => {
-    const tag = ev.target && ev.target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
-      ev.preventDefault();
-      const prev = undo(hist);
-      if (prev !== null) {
-        ed.regions = JSON.parse(prev);
-        ed.selectedId = null;
-        render();
-      }
-      return;
-    }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') {
-      ev.preventDefault();
-      const next = redo(hist);
-      if (next !== null) {
-        ed.regions = JSON.parse(next);
-        ed.selectedId = null;
-        render();
-      }
-      return;
-    }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
-      ev.preventDefault();
-      persist(true);
-      return;
-    }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') {
-      ev.preventDefault();
-      doExport();
-      return;
-    }
-    if (ev.key === 'v' || ev.key === 'V') setTool(ed, 'select');
-    if (ev.key === 'r' || ev.key === 'R') setTool(ed, 'rect');
-    if (ev.key === 'g' || ev.key === 'G') setTool(ed, 'poly');
-    if (ev.key === 'Enter' && closePoly(ed)) {
-      record(null);
-      render();
-    }
-    if (ev.key === 'Escape') {
-      ed.draft = null;
+  // ---- 快捷键：统一走 app/shortcuts 的键表 ----
+  const fitDims = () => {
+    const ov = overlays.get(ed.page);
+    return {
+      viewportW: shell.canvas.clientWidth || 800,
+      viewportH: shell.canvas.clientHeight || 600,
+      pageW: ov ? ov.size.w : ed.pageW,
+      pageH: ov ? ov.size.h : ed.pageH,
+      padX: 24,
+      padY: 24,
+    };
+  };
+
+  function goPage(no) {
+    const total = stack.pages.length || 1;
+    const next = Math.min(Math.max(1, no), total);
+    stack.setCurrent(next);
+    if (ed.page !== next) {
+      ed.page = next;
       ed.selectedId = null;
       render();
     }
-    if (ev.key === 'Delete' || ev.key === 'Backspace') {
-      if (deleteSelection(ed)) {
-        record(null);
-        render();
-      }
+    return next;
+  }
+
+  const actions = {
+    'tool.select': () => { setTool(ed, 'select'); markTool('select'); },
+    'tool.rect': () => { setTool(ed, 'rect'); markTool('rect'); },
+    'tool.poly': () => { setTool(ed, 'poly'); markTool('poly'); },
+    'tool.closePoly': () => { if (closePoly(ed)) { record(null); render(); } },
+    'page.next': () => goPage(stack.current + 1),
+    'page.prev': () => goPage(stack.current - 1),
+    'page.plus10': () => goPage(stack.current + 10),
+    'page.minus10': () => goPage(stack.current - 10),
+    'page.first': () => goPage(1),
+    'page.last': () => goPage(stack.pages.length),
+    'zoom.in': () => setScale(zoom, stepZoom(zoom.scale, 1)),
+    'zoom.out': () => setScale(zoom, stepZoom(zoom.scale, -1)),
+    'zoom.reset': () => setScale(zoom, 1),
+    'zoom.fitPage': () => setFit(zoom, 'page', fitDims()),
+    'zoom.fitWidth': () => setFit(zoom, 'width', fitDims()),
+    'history.undo': undoUi,
+    'history.redo': redoUi,
+    'export.zip': () => doExport(),
+    'config.save': () => persist(true),
+    'file.open': async () => {
+      const file = await pickFile();
+      if (file) load(file);
+    },
+    'region.delete': () => {
+      if (deleteSelection(ed)) { record(null); render(); }
+    },
+    'region.nudge': (ev) => {
+      const v = nudgeVector(ev);
+      if (nudge(ed, v.dx, v.dy)) { record('nudge'); render(); }
+    },
+    cancel: () => {
+      ed.draft = null;
+      ed.selectedId = null;
+      render();
+    },
+  };
+
+  bindShortcuts(document, actions);
+
+  // 滚动时当前页跟着走（右栏预览与列表要跟着变）
+  stack.root.addEventListener('scroll', () => {
+    if (state !== 'ready') return;
+    const rects = stack.visibleRects();
+    const viewportTop = shell.canvas.getBoundingClientRect().top + 8;
+    const no = pageAtScroll(rects, viewportTop);
+    if (no !== ed.page) {
+      ed.page = no;
+      ed.selectedId = null;
+      render();
     }
-    const step = ev.altKey ? 10 : 1;
-    if (ev.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(ev.key)) {
-      ev.preventDefault();
-      const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0;
-      const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0;
-      if (nudge(ed, dx, dy)) {
-        record('nudge');
-        render();
-      }
-    }
-  });
+  }, { passive: true });
 
   const load = async (file) => {
     persist(true); // 打开新文件前先落上一份

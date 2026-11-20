@@ -81,6 +81,7 @@ export function createPageStack(opts) {
   }
 
   return {
+    root,
     pages,
     mount,
     setCurrent,
