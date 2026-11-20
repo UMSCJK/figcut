@@ -3,8 +3,8 @@ import { planExports, MASK_PPP } from '../src/app/export-zip.js';
 
 const rect = (page, y, kind, opt) => ({ page, kind, opt, q: '', shape: 'rect', rect: { x: 10, y, w: 50, h: 40 } });
 
-test('export-zip: 掩膜栅格是 2px/pt', () => {
-  assert(MASK_PPP === 2);
+test('export-zip: 分析栅格 3px/pt（细线不丢）', () => {
+  assert(MASK_PPP === 3);
 });
 
 test('export-zip: 页内按竖直位置编号，命名带页与序号', () => {
