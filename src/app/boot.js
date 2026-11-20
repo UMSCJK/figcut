@@ -949,7 +949,6 @@ export function boot(opts = {}) {
     colsBtn.innerHTML = ICONS.grid;
     sideHead.appendChild(colsBtn);
     colsBtn.addEventListener('click', () => {
-      if (colsBtn.disabled) return;
       layout.sideCols = layout.sideCols === 2 ? 1 : 2;
       saveLayout();
       updateColsBtn();
@@ -964,17 +963,21 @@ export function boot(opts = {}) {
     return layout.sideCols === 2 && w >= 340 ? 2 : 1;
   }
 
+  // 按钮随时可点：切的是"偏好"，宽度不够只是暂时不生效（不是禁用）
   function updateColsBtn() {
     if (!colsBtn) return;
     const w = shell.panelLeft.getBoundingClientRect().width;
-    const can = w >= 340;
-    colsBtn.disabled = !can;
-    colsBtn.classList.toggle('is-active', effectiveCols() === 2);
-    colsBtn.title = can
-      ? effectiveCols() === 2
+    const wide = w >= 340;
+    const want = layout.sideCols === 2;
+    colsBtn.disabled = false;
+    colsBtn.classList.toggle('is-active', want);
+    colsBtn.title = want
+      ? wide
         ? '切回单列'
-        : '切到双列'
-      : '左栏拖到 340px 以上才能双列';
+        : '双列已锁定：左栏拖到 340px 以上自动生效，点一下可取消'
+      : wide
+        ? '切到双列'
+        : '切到双列（需左栏 ≥340px，会先记下）';
   }
 
   const leftToggle = document.getElementById('toggle-left');
