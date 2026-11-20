@@ -807,9 +807,9 @@ export function boot(opts = {}) {
 
   // 适应页面/适应页宽/自动：窗口或侧栏一变就重新算，别等用户再点一次
   function refitIfNeeded() {
-    if (!(zoom.auto || zoom.mode === 'fit-page' || zoom.mode === 'fit-width')) return;
+    if (!(zoom.auto || zoom.mode === 'page' || zoom.mode === 'width')) return;
     const auto = zoom.auto;
-    setFit(zoom, zoom.mode === 'fit-width' ? 'width' : 'page', fitDims());
+    setFit(zoom, zoom.mode === 'width' ? 'width' : 'page', fitDims());
     zoom.auto = auto;
   }
 

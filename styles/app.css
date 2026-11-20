@@ -16,7 +16,7 @@ button { cursor: pointer; }
 
 /* 界面文字不该被框选；输入框和正文里照常可选 */
 body { user-select: none; -webkit-user-select: none; }
-input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text; }
+input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: text; -webkit-user-select: text; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .app {
@@ -746,3 +746,23 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .recent-item:hover { background: var(--hover); }
 .recent-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-item .meta { color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* 文本层：透明文字，选择工具下可框选复制 */
+.textlayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.textlayer span {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+}
+
+.canvas[data-tool="select"] .textlayer { pointer-events: auto; }
+.canvas[data-tool="select"] .textlayer span { pointer-events: auto; }

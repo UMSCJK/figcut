@@ -131,10 +131,10 @@ export function renderZoomControl(opts) {
         btn.classList.toggle('on', !z.auto && z.mode === 'free' && Math.abs(z.scale - v) < 1e-6);
       } else if (action === 'fit-page') {
         btn.textContent = '整页';
-        btn.classList.toggle('on', z.mode === 'fit-page');
+        btn.classList.toggle('on', z.mode === 'page');
       } else {
         btn.textContent = '页宽';
-        btn.classList.toggle('on', z.mode === 'fit-width');
+        btn.classList.toggle('on', z.mode === 'width');
       }
     }
   }
@@ -142,8 +142,8 @@ export function renderZoomControl(opts) {
   function sync() {
     let label = pct(z.scale);
     if (z.auto) label = '自动';
-    else if (z.mode === 'fit-page') label = '整页';
-    else if (z.mode === 'fit-width') label = '页宽';
+    else if (z.mode === 'page') label = '整页';
+    else if (z.mode === 'width') label = '页宽';
     entry.textContent = label + ' ▾';
     entry.title = '缩放：' + label;
     if (!menu.hidden) syncCells();

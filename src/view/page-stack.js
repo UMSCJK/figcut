@@ -48,6 +48,41 @@ export function createPageStack(opts) {
     }, 220);
   }
 
+  // 文本层：透明 span，选择工具下可框选/复制页面文字
+  async function buildTextLayer(p, scale) {
+    if (!p.textEl) {
+      p.textEl = doc.createElement('div');
+      p.textEl.className = 'textlayer';
+      p.wrap.appendChild(p.textEl);
+    }
+    if (!p.textItems) {
+      try {
+        p.textItems = await p.page.getTextContent();
+      } catch (e) {
+        p.textItems = { items: [] };
+      }
+    }
+    const host = p.textEl;
+    host.textContent = '';
+    host.style.width = p.canvas.style.width;
+    host.style.height = p.canvas.style.height;
+    const vp = p.page.getViewport({ scale: 1 });
+    for (const item of p.textItems.items) {
+      if (!item.str || !item.str.trim()) continue;
+      const span = doc.createElement('span');
+      const x = item.transform[4] * scale;
+      const y = (vp.height - (item.transform[5] + item.height)) * scale;
+      span.textContent = item.str;
+      span.style.left = x + 'px';
+      span.style.top = y + 'px';
+      span.style.width = Math.max(1, item.width * scale) + 'px';
+      span.style.height = Math.max(1, item.height * scale) + 'px';
+      span.style.fontSize = Math.max(1, item.height * scale) + 'px';
+      span.style.lineHeight = Math.max(1, item.height * scale) + 'px';
+      host.appendChild(span);
+    }
+  }
+
   async function applyZoom() {
     if (!pdfDoc) return;
     const my = ++token;
@@ -75,6 +110,7 @@ export function createPageStack(opts) {
       p.overlay.style.width = Math.round(vp.width) + 'px';
       p.overlay.style.height = Math.round(vp.height) + 'px';
       await renderPage(p.page, { scale, dpr, canvas: p.canvas });
+      await buildTextLayer(p, scale);
     }
   }
 

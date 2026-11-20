@@ -87,7 +87,7 @@ button { cursor: pointer; }
 
 /* 界面文字不该被框选；输入框和正文里照常可选 */
 body { user-select: none; -webkit-user-select: none; }
-input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text; }
+input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: text; -webkit-user-select: text; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .app {
@@ -818,6 +818,26 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .recent-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-item .meta { color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
 
+/* 文本层：透明文字，选择工具下可框选复制 */
+.textlayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.textlayer span {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+}
+
+.canvas[data-tool="select"] .textlayer { pointer-events: auto; }
+.canvas[data-tool="select"] .textlayer span { pointer-events: auto; }
+
 </style>
 </head>
 <body>
@@ -1407,10 +1427,10 @@ function renderZoomControl(opts) {
         btn.classList.toggle('on', !z.auto && z.mode === 'free' && Math.abs(z.scale - v) < 1e-6);
       } else if (action === 'fit-page') {
         btn.textContent = '整页';
-        btn.classList.toggle('on', z.mode === 'fit-page');
+        btn.classList.toggle('on', z.mode === 'page');
       } else {
         btn.textContent = '页宽';
-        btn.classList.toggle('on', z.mode === 'fit-width');
+        btn.classList.toggle('on', z.mode === 'width');
       }
     }
   }
@@ -1418,8 +1438,8 @@ function renderZoomControl(opts) {
   function sync() {
     let label = pct(z.scale);
     if (z.auto) label = '自动';
-    else if (z.mode === 'fit-page') label = '整页';
-    else if (z.mode === 'fit-width') label = '页宽';
+    else if (z.mode === 'page') label = '整页';
+    else if (z.mode === 'width') label = '页宽';
     entry.textContent = label + ' ▾';
     entry.title = '缩放：' + label;
     if (!menu.hidden) syncCells();
@@ -1533,6 +1553,41 @@ function createPageStack(opts) {
     }, 220);
   }
 
+  // 文本层：透明 span，选择工具下可框选/复制页面文字
+  async function buildTextLayer(p, scale) {
+    if (!p.textEl) {
+      p.textEl = doc.createElement('div');
+      p.textEl.className = 'textlayer';
+      p.wrap.appendChild(p.textEl);
+    }
+    if (!p.textItems) {
+      try {
+        p.textItems = await p.page.getTextContent();
+      } catch (e) {
+        p.textItems = { items: [] };
+      }
+    }
+    const host = p.textEl;
+    host.textContent = '';
+    host.style.width = p.canvas.style.width;
+    host.style.height = p.canvas.style.height;
+    const vp = p.page.getViewport({ scale: 1 });
+    for (const item of p.textItems.items) {
+      if (!item.str || !item.str.trim()) continue;
+      const span = doc.createElement('span');
+      const x = item.transform[4] * scale;
+      const y = (vp.height - (item.transform[5] + item.height)) * scale;
+      span.textContent = item.str;
+      span.style.left = x + 'px';
+      span.style.top = y + 'px';
+      span.style.width = Math.max(1, item.width * scale) + 'px';
+      span.style.height = Math.max(1, item.height * scale) + 'px';
+      span.style.fontSize = Math.max(1, item.height * scale) + 'px';
+      span.style.lineHeight = Math.max(1, item.height * scale) + 'px';
+      host.appendChild(span);
+    }
+  }
+
   async function applyZoom() {
     if (!pdfDoc) return;
     const my = ++token;
@@ -1560,6 +1615,7 @@ function createPageStack(opts) {
       p.overlay.style.width = Math.round(vp.width) + 'px';
       p.overlay.style.height = Math.round(vp.height) + 'px';
       await renderPage(p.page, { scale, dpr, canvas: p.canvas });
+      await buildTextLayer(p, scale);
     }
   }
 
@@ -4781,9 +4837,9 @@ function boot(opts = {}) {
 
   // 适应页面/适应页宽/自动：窗口或侧栏一变就重新算，别等用户再点一次
   function refitIfNeeded() {
-    if (!(zoom.auto || zoom.mode === 'fit-page' || zoom.mode === 'fit-width')) return;
+    if (!(zoom.auto || zoom.mode === 'page' || zoom.mode === 'width')) return;
     const auto = zoom.auto;
-    setFit(zoom, zoom.mode === 'fit-width' ? 'width' : 'page', fitDims());
+    setFit(zoom, zoom.mode === 'width' ? 'width' : 'page', fitDims());
     zoom.auto = auto;
   }
 
