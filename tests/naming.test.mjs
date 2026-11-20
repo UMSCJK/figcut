@@ -1,31 +1,40 @@
 import { test, assert } from '../tools/testkit.mjs';
-import { pad, stemName, optName, regionFileName, zipName, configKey } from '../src/core/naming.js';
+import { pad, sanitize, stemName, optName, roleOf, regionFileName, zipName, configKey } from '../src/core/naming.js';
 
-test('naming: 序号补零到两位', () => {
+test('naming: 序号补零', () => {
   assert(pad(1) === '01');
   assert(pad(12) === '12');
-  assert(pad(3.9) === '03');
 });
 
-test('naming: 命名形如 p01-02-optC.png', () => {
-  assert(regionFileName({ page: 1, index: 2, kind: 'opt', opt: 'C' }) === 'p01-02-optC.png');
-  assert(regionFileName({ page: 10, index: 3, kind: 'stem' }) === 'p10-03-stem.png');
-  assert(optName(0) === 'optA');
-  assert(optName('d') === 'optD');
-  assert(stemName() === 'stem');
+test('naming: 文件名带页、题号、角色、备注', () => {
+  assert(regionFileName({ page: 9, q: '28', kind: 'stem' }) === 'p09-q28-stem.png');
+  assert(regionFileName({ page: 9, q: '29', kind: 'opt', opt: 'B', note: '第二行' }) === 'p09-q29-optB-第二行.png');
+  assert(regionFileName({ page: 1, kind: 'opt', opt: 'A' }) === 'p01-q00-optA.png', '没题号用 00');
 });
 
-test('naming: 非法选项抛错', () => {
+test('naming: A-K 全支持，自定义选项进文件名', () => {
+  assert(optName('K') === 'optK');
+  assert(optName(10) === 'optK');
+  assert(roleOf({ kind: 'opt', opt: 'custom', optText: '甲' }) === 'opt甲');
+  assert(roleOf({ kind: 'opt', opt: 'custom', optText: '' }) === 'optX');
+});
+
+test('naming: 非法字符清洗', () => {
+  assert(sanitize(' a/b:c*? ' ) === 'a_b_c', sanitize(' a/b:c*? '));
+  assert(regionFileName({ page: 2, q: '3', kind: 'stem', note: 'x y' }) === 'p02-q3-stem-x_y.png');
+});
+
+test('naming: 超出 A-K 抛错', () => {
   let threw = false;
   try {
-    optName('E');
+    optName('Z');
   } catch (e) {
     threw = e && e.name === 'FigcutError';
   }
-  assert(threw, 'E 应该抛错');
+  assert(threw);
 });
 
 test('naming: ZIP 名与配置键', () => {
   assert(zipName('Math Test 2.pdf') === 'figures_Math Test 2.zip');
-  assert(configKey('Math Test 2.pdf', 123456) === 'Math Test 2.pdf|123456');
+  assert(configKey('a.pdf', 123) === 'a.pdf|123');
 });

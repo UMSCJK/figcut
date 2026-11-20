@@ -14,6 +14,7 @@ import { createPreview, renderPreview } from '../ui/preview.js';
 import { renderRegions } from '../ui/region-list.js';
 import { renderPageList } from '../ui/page-list.js';
 import { boundsOf } from '../view/editor.js';
+import { cornerAt } from '../core/geometry.js';
 import { renderPage } from '../pdf/bitmap.js';
 import { buildInkMask } from '../pdf/ink.js';
 import { computeExportBox, growWhite } from '../core/whitemargin.js';
@@ -21,6 +22,9 @@ import {
   createEditor,
   setTool,
   setPage,
+  edgeAt,
+  vertexAt,
+  regionAt,
   pointerDown,
   pointerMove,
   pointerUp,
@@ -539,13 +543,36 @@ export function boot(opts = {}) {
     render();
   });
 
+  // hover 反馈：手柄/顶点用 pointer，框体用 move，空白看工具
+  // hover 反馈：手柄/顶点用 pointer，框体用 move，空白看工具
+  function hoverCursor(ev) {
+    if (state !== 'ready') return '';
+    const hit = pointOf(ev);
+    if (!hit) return '';
+    const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === hit.no);
+    if (sel) {
+      if (sel.shape === 'rect') {
+        if (cornerAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'nwse-resize';
+        if (edgeAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'pointer';
+      } else if (vertexAt(sel.points, hit.pt.x, hit.pt.y, 10) >= 0) {
+        return 'pointer';
+      }
+    }
+    if (regionAt(ed, hit.pt)) return 'move';
+    return ed.tool === 'select' ? 'default' : 'crosshair';
+  }
+
   shell.canvas.addEventListener('pointermove', (ev) => {
     if (pan) {
       stack.root.scrollLeft = pan.left - (ev.clientX - pan.x);
       stack.root.scrollTop = pan.top - (ev.clientY - pan.y);
       return;
     }
-    if (!drawing || state !== 'ready') return;
+    if (!drawing) {
+      shell.canvas.style.cursor = hoverCursor(ev);
+      return;
+    }
+    if (state !== 'ready') return;
     const hit = pointOf(ev);
     if (!hit) return;
     lastPt = hit.pt;
@@ -677,6 +704,7 @@ export function boot(opts = {}) {
     if (state !== 'ready') return;
     const rects = stack.visibleRects();
     const viewportTop = shell.canvas.getBoundingClientRect().top + 8;
+    stack.scheduleZoom(); // 滚到的新页需要补渲染
     const no = pageAtScroll(rects, viewportTop);
     if (no !== ed.page) {
       ed.page = no;

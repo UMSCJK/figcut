@@ -25,10 +25,11 @@ export function toBytes(zip) {
 
   for (const entry of zip.entries) {
     const name = new TextEncoder().encode(entry.name);
+    const UTF8_FLAG = 0x0800; // 让解压工具按 UTF-8 解码文件名（中文备注不会乱码）
     const local = [
       ...le32(0x04034b50),
       ...le16(20),
-      ...le16(0),
+      ...le16(UTF8_FLAG),
       ...le16(0),
       ...le16(DOS_TIME),
       ...le16(DOS_DATE),
@@ -44,7 +45,7 @@ export function toBytes(zip) {
       ...le32(0x02014b50),
       ...le16(20),
       ...le16(20),
-      ...le16(0),
+      ...le16(UTF8_FLAG),
       ...le16(0),
       ...le16(DOS_TIME),
       ...le16(DOS_DATE),

@@ -52,8 +52,16 @@ export function createPageStack(opts) {
     const scale = zoom.scale;
     const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
 
+    const host = container.getBoundingClientRect();
+    const near = (p) => {
+      const r = p.wrap.getBoundingClientRect();
+      return r.bottom > host.top - 800 && r.top < host.bottom + 800;
+    };
+
     for (const p of pages) {
       if (my !== token) return;
+      // 只重绘视口附近的页；离得远的等滚回来再画，缩放才不会卡
+      if (!near(p) && p.renderedScale === scale) continue;
       const vp = p.page.getViewport({ scale });
       p.wrap.style.transform = '';
       p.renderedScale = scale;

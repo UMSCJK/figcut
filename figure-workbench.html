@@ -289,6 +289,8 @@ button { cursor: pointer; }
   vector-effect: non-scaling-stroke;
 }
 
+.handle { cursor: pointer; }
+
 .handle {
   fill: #ffffff;
   stroke: var(--accent);
@@ -563,6 +565,8 @@ button { cursor: pointer; }
 }
 
 .region-kind { width: 58px; font-size: 11px; }
+.region-custom { width: 64px; padding: 0 5px; }
+.region-custom[hidden] { display: none; }
 .region-q { width: 48px; font-family: var(--mono); padding: 0 5px; }
 .region-note { flex: 1; padding: 0 5px; border-color: var(--line); color: var(--text-2); }
 .region-label { font-size: 11.5px; color: var(--text-2); }
@@ -1095,7 +1099,8 @@ function icon(name, opts) {
 
 
 
-const PRESETS = [0.12, 0.25, 0.33, 0.5, 0.66, 0.75, 1, 1.25, 1.5, 2, 4, 8, 16, 25, 50, 100];
+// Chrome 那套档位（去掉 800% 以上）
+const PRESETS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
 const pct = (v) => {
   const p = v * 100;
@@ -1332,8 +1337,16 @@ function createPageStack(opts) {
     const scale = zoom.scale;
     const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
 
+    const host = container.getBoundingClientRect();
+    const near = (p) => {
+      const r = p.wrap.getBoundingClientRect();
+      return r.bottom > host.top - 800 && r.top < host.bottom + 800;
+    };
+
     for (const p of pages) {
       if (my !== token) return;
+      // 只重绘视口附近的页；离得远的等滚回来再画，缩放才不会卡
+      if (!near(p) && p.renderedScale === scale) continue;
       const vp = p.page.getViewport({ scale });
       p.wrap.style.transform = '';
       p.renderedScale = scale;
@@ -2084,19 +2097,29 @@ function drawCrop(preview, opts) {
 }
 
 // ---- src/ui/inspector.js ----
-// 选中区域的就地控件：类型（题干/A-D）、题号、备注
-// 状态：已实现。setter 是纯函数，DOM 只负责把它们接上。
+// 选中区域的就地控件：类型（题干 / A–K / 自定义）、题号、备注
+// 状态：已实现。setter 是纯函数。
 
-const KINDS = ['stem', 'A', 'B', 'C', 'D'];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+const KINDS = ['stem', ...LETTERS, 'custom'];
 
 function setKind(region, kind) {
   if (kind === 'stem') {
     region.kind = 'stem';
     region.opt = null;
-  } else if (KINDS.includes(kind)) {
+  } else if (kind === 'custom') {
+    region.kind = 'opt';
+    region.opt = 'custom';
+  } else if (LETTERS.includes(kind)) {
     region.kind = 'opt';
     region.opt = kind;
   }
+  return region;
+}
+
+function setCustomOption(region, text) {
+  region.opt = 'custom';
+  region.optText = String(text || '').trim();
   return region;
 }
 
@@ -2111,7 +2134,8 @@ function setNote(region, note) {
 }
 
 function kindValue(region) {
-  return region.kind === 'opt' ? region.opt || 'A' : 'stem';
+  if (region.kind !== 'opt') return 'stem';
+  return region.opt === 'custom' ? 'custom' : region.opt || 'A';
 }
 
 function buildControls(doc, region, onChange) {
@@ -2124,10 +2148,18 @@ function buildControls(doc, region, onChange) {
   for (const k of KINDS) {
     const o = doc.createElement('option');
     o.value = k;
-    o.textContent = k === 'stem' ? '题干' : k;
+    o.textContent = k === 'stem' ? '题干' : k === 'custom' ? '自定义' : k;
     kind.appendChild(o);
   }
   kind.value = kindValue(region);
+
+  const custom = doc.createElement('input');
+  custom.className = 'region-custom';
+  custom.type = 'text';
+  custom.placeholder = '自定义';
+  custom.value = region.optText || '';
+  custom.title = '自定义选项名';
+  custom.hidden = kind.value !== 'custom';
 
   const q = doc.createElement('input');
   q.className = 'region-q';
@@ -2145,7 +2177,12 @@ function buildControls(doc, region, onChange) {
 
   kind.addEventListener('change', () => {
     setKind(region, kind.value);
+    custom.hidden = kind.value !== 'custom';
     onChange(region);
+  });
+  custom.addEventListener('input', () => {
+    setCustomOption(region, custom.value);
+    onChange(region, { quiet: true });
   });
   q.addEventListener('input', () => {
     setQuestion(region, q.value);
@@ -2156,11 +2193,10 @@ function buildControls(doc, region, onChange) {
     onChange(region, { quiet: true });
   });
 
-  row.append(kind, q, note);
+  row.append(kind, custom, q, note);
   return row;
 }
 
-// 给一个容器就地渲染控件（骨架里声明的名字）
 function renderInspector(container, region, onChange) {
   const row = buildControls(container.ownerDocument, region, onChange);
   container.textContent = '';
@@ -2998,15 +3034,24 @@ function encodePng(image) {
 }
 
 // ---- src/core/naming.js ----
-// 导出文件名与配置键
-// 状态：已实现。规则见 SPEC 第 6/7 节：p{页:02}-{序号:02}-{stem|optA..optD}.png
+// 导出文件名：p{页:02}-q{题号}-{角色}-{备注}.png
+// 状态：已实现。暴力美学：文件名里带上页、题号、角色、备注，全部清洗成安全字符。
 
 
 
-const OPT_LETTERS = ['A', 'B', 'C', 'D'];
+const OPT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
 
 function pad(n, width = 2) {
   return String(Math.trunc(n)).padStart(width, '0');
+}
+
+// 非法字符与空白统一压成下划线，长备注截断
+function sanitize(text, max = 24) {
+  const s = String(text === undefined || text === null ? '' : text)
+    .trim()
+    .replace(/[\\/:*?"<>|\s]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return s.slice(0, max);
 }
 
 function stemName() {
@@ -3016,17 +3061,29 @@ function stemName() {
 function optName(which) {
   const idx = typeof which === 'number' ? which : OPT_LETTERS.indexOf(String(which).toUpperCase());
   if (idx < 0 || idx >= OPT_LETTERS.length) {
-    throw figcutError('bad-option', '选项只能是 A-D 或 0-3', { which });
+    throw figcutError('bad-option', '选项只能是 A-K 或 0-10', { which });
   }
   return 'opt' + OPT_LETTERS[idx];
 }
 
+// 角色：stem / optA..optK / opt<自定义名>
+function roleOf(region) {
+  if (region.kind !== 'opt') return 'stem';
+  if (region.opt === 'custom') {
+    const name = sanitize(region.optText, 12);
+    return 'opt' + (name || 'X');
+  }
+  return optName(region.opt === undefined || region.opt === null ? 0 : region.opt);
+}
+
+// p09-q28-stem.png / p09-q29-optB-note.png
 function regionFileName(region) {
-  const page = region.page === undefined ? 1 : region.page;
-  const index = region.index === undefined ? 1 : region.index;
-  const kind = region.kind === undefined ? 'stem' : region.kind;
-  const tail = kind === 'stem' ? stemName() : optName(region.opt);
-  return 'p' + pad(page) + '-' + pad(index) + '-' + tail + '.png';
+  const page = pad(region.page === undefined ? 1 : region.page);
+  const q = sanitize(region.q, 8) || '00';
+  const parts = ['p' + page, 'q' + q, roleOf(region)];
+  const note = sanitize(region.note, 24);
+  if (note) parts.push(note);
+  return parts.join('-') + '.png';
 }
 
 function zipName(pdfName) {
@@ -3034,7 +3091,6 @@ function zipName(pdfName) {
   return 'figures_' + base + '.zip';
 }
 
-// 改名等于新文件：配置键含字节数。
 function configKey(fileName, bytes) {
   return String(fileName) + '|' + Number(bytes);
 }
@@ -3209,10 +3265,11 @@ function toBytes(zip) {
 
   for (const entry of zip.entries) {
     const name = new TextEncoder().encode(entry.name);
+    const UTF8_FLAG = 0x0800; // 让解压工具按 UTF-8 解码文件名（中文备注不会乱码）
     const local = [
       ...le32(0x04034b50),
       ...le16(20),
-      ...le16(0),
+      ...le16(UTF8_FLAG),
       ...le16(0),
       ...le16(DOS_TIME),
       ...le16(DOS_DATE),
@@ -3228,7 +3285,7 @@ function toBytes(zip) {
       ...le32(0x02014b50),
       ...le16(20),
       ...le16(20),
-      ...le16(0),
+      ...le16(UTF8_FLAG),
       ...le16(0),
       ...le16(DOS_TIME),
       ...le16(DOS_DATE),
@@ -3302,7 +3359,7 @@ function planExports(regions) {
       region: r,
       page: r.page,
       index: n,
-      name: regionFileName({ page: r.page, index: n, kind: r.kind, opt: r.opt }),
+      name: regionFileName(r),
       box: boundsOf(r),
     };
   });
@@ -3653,6 +3710,7 @@ function banner(message, opts = {}) {
 // ---- src/app/boot.js ----
 // 启动装配与状态机
 // 状态：已实现（打开 PDF、连续滚动、缩放、矩形/多边形标注、撤销重做）。
+
 
 
 
@@ -4181,13 +4239,36 @@ function boot(opts = {}) {
     render();
   });
 
+  // hover 反馈：手柄/顶点用 pointer，框体用 move，空白看工具
+  // hover 反馈：手柄/顶点用 pointer，框体用 move，空白看工具
+  function hoverCursor(ev) {
+    if (state !== 'ready') return '';
+    const hit = pointOf(ev);
+    if (!hit) return '';
+    const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === hit.no);
+    if (sel) {
+      if (sel.shape === 'rect') {
+        if (cornerAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'nwse-resize';
+        if (edgeAt(sel.rect, hit.pt.x, hit.pt.y, 10)) return 'pointer';
+      } else if (vertexAt(sel.points, hit.pt.x, hit.pt.y, 10) >= 0) {
+        return 'pointer';
+      }
+    }
+    if (regionAt(ed, hit.pt)) return 'move';
+    return ed.tool === 'select' ? 'default' : 'crosshair';
+  }
+
   shell.canvas.addEventListener('pointermove', (ev) => {
     if (pan) {
       stack.root.scrollLeft = pan.left - (ev.clientX - pan.x);
       stack.root.scrollTop = pan.top - (ev.clientY - pan.y);
       return;
     }
-    if (!drawing || state !== 'ready') return;
+    if (!drawing) {
+      shell.canvas.style.cursor = hoverCursor(ev);
+      return;
+    }
+    if (state !== 'ready') return;
     const hit = pointOf(ev);
     if (!hit) return;
     lastPt = hit.pt;
@@ -4319,6 +4400,7 @@ function boot(opts = {}) {
     if (state !== 'ready') return;
     const rects = stack.visibleRects();
     const viewportTop = shell.canvas.getBoundingClientRect().top + 8;
+    stack.scheduleZoom(); // 滚到的新页需要补渲染
     const no = pageAtScroll(rects, viewportTop);
     if (no !== ed.page) {
       ed.page = no;

@@ -5,7 +5,8 @@ import { setScale, setFit } from '../view/zoom.js';
 import { zoomPresets } from '../core/layout.js';
 import { ICONS } from './icons.js';
 
-const PRESETS = [0.12, 0.25, 0.33, 0.5, 0.66, 0.75, 1, 1.25, 1.5, 2, 4, 8, 16, 25, 50, 100];
+// Chrome 那套档位（去掉 800% 以上）
+const PRESETS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
 const pct = (v) => {
   const p = v * 100;

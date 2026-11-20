@@ -52,7 +52,7 @@ test('export: exportRegions 带出正确文件名', () => {
     regions: [{ page: 3, index: 2, kind: 'opt', opt: 'B', box: { x: 1, y: 1, w: 4, h: 4 } }],
   });
   assert(out.length === 1);
-  assert(out[0].name === 'p03-02-optB.png', out[0].name);
+  assert(out[0].name === 'p03-q00-optB.png', out[0].name);
   assert(out[0].bytes[0] === 0x89);
 });
 

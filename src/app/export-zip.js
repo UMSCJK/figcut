@@ -28,7 +28,7 @@ export function planExports(regions) {
       region: r,
       page: r.page,
       index: n,
-      name: regionFileName({ page: r.page, index: n, kind: r.kind, opt: r.opt }),
+      name: regionFileName(r),
       box: boundsOf(r),
     };
   });
