@@ -10,6 +10,7 @@ export function createZoom(opts = {}) {
     mode: 'free',
     min: MIN_SCALE,
     max: MAX_SCALE,
+    auto: false,
     listeners: new Set(),
   };
 }
@@ -24,6 +25,7 @@ export function subscribe(z, fn) {
 }
 
 export function setScale(z, value) {
+  z.auto = false;
   const next = clamp(Number(value), z.min, z.max);
   if (!Number.isFinite(next)) return z.scale;
   z.mode = 'free';
@@ -35,6 +37,7 @@ export function setScale(z, value) {
 
 // 'page' 整页可见，'width' 贴满宽度
 export function setFit(z, mode, dims) {
+  z.auto = false;
   const scale =
     mode === 'page'
       ? fitPageScale(dims)

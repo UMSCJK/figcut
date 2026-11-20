@@ -737,6 +737,11 @@ export function boot(opts = {}) {
     }
   };
 
+  // 自动缩放：窗口变化时重新适应页面
+  window.addEventListener('resize', () => {
+    if (zoom.auto) setFit(zoom, 'page', fitDims());
+  });
+
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => {

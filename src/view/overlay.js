@@ -44,6 +44,11 @@ function addHandles(doc, parent, sel, scale) {
   addHandle(doc, parent, r.x + r.w, r.y, size, 'is-ne');
   addHandle(doc, parent, r.x, r.y + r.h, size, 'is-sw');
   addHandle(doc, parent, r.x + r.w, r.y + r.h, size, 'is-se');
+  // 四条边中点也给手柄
+  addHandle(doc, parent, r.x + r.w / 2, r.y, size * 0.85, 'is-edge');
+  addHandle(doc, parent, r.x + r.w / 2, r.y + r.h, size * 0.85, 'is-edge');
+  addHandle(doc, parent, r.x, r.y + r.h / 2, size * 0.85, 'is-edge');
+  addHandle(doc, parent, r.x + r.w, r.y + r.h / 2, size * 0.85, 'is-edge');
 }
 
 export function drawRegions(overlay, regions, opts = {}) {

@@ -81,7 +81,66 @@ export function nudge(ed, dx, dy) {
   return r;
 }
 
+// 边命中：把矩形拆成四条边，返回 'n' | 's' | 'w' | 'e'
+export function edgeAt(rect, x, y, tol = 8) {
+  const nearX = x >= rect.x - tol && x <= rect.x + rect.w + tol;
+  const nearY = y >= rect.y - tol && y <= rect.y + rect.h + tol;
+  if (!nearX || !nearY) return null;
+  if (Math.abs(y - rect.y) <= tol) return 'n';
+  if (Math.abs(y - (rect.y + rect.h)) <= tol) return 's';
+  if (Math.abs(x - rect.x) <= tol) return 'w';
+  if (Math.abs(x - (rect.x + rect.w)) <= tol) return 'e';
+  return null;
+}
+
+// 顶点命中：返回索引
+export function vertexAt(points, x, y, tol = 8) {
+  for (let i = 0; i < points.length; i += 1) {
+    if (Math.hypot(points[i].x - x, points[i].y - y) <= tol) return i;
+  }
+  return -1;
+}
+
+const HANDLE_TOL = 8;
+
+// 任何工具下，先看能不能编辑已有框；空白处才用当前工具新建。
 export function pointerDown(ed, pt) {
+  const sel = selected(ed);
+  if (sel && sel.page === ed.page) {
+    if (sel.shape === 'rect') {
+      const corner = cornerAt(sel.rect, pt.x, pt.y, HANDLE_TOL);
+      if (corner) {
+        ed.drag = { mode: 'resize', corner, start: { ...pt }, origin: { ...sel.rect }, target: sel };
+        return { selection: sel.id, mode: 'resize' };
+      }
+      const edge = edgeAt(sel.rect, pt.x, pt.y, HANDLE_TOL);
+      if (edge) {
+        ed.drag = { mode: 'resize', edge, start: { ...pt }, origin: { ...sel.rect }, target: sel };
+        return { selection: sel.id, mode: 'resize' };
+      }
+    } else {
+      const vi = vertexAt(sel.points, pt.x, pt.y, HANDLE_TOL + 2);
+      if (vi >= 0) {
+        ed.drag = { mode: 'vertex', index: vi, start: { ...pt }, origin: sel.points.map((p) => ({ ...p })), target: sel };
+        return { selection: sel.id, mode: 'vertex' };
+      }
+    }
+  }
+
+  const hit = regionAt(ed, pt);
+  if (hit) {
+    ed.selectedId = hit.id;
+    ed.drag = {
+      mode: 'move',
+      start: { ...pt },
+      origin: hit.shape === 'poly' ? hit.points.map((p) => ({ ...p })) : { ...hit.rect },
+      target: hit,
+    };
+    return { selection: hit.id, mode: 'move' };
+  }
+
+  ed.selectedId = null;
+
   if (ed.tool === 'rect') {
     ed.draft = { shape: 'rect', x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
     return { draft: true };
@@ -93,20 +152,7 @@ export function pointerDown(ed, pt) {
     return { draft: true, points: ed.draft.points.length };
   }
 
-  const hit = regionAt(ed, pt);
-  ed.selectedId = hit ? hit.id : null;
-  if (!hit) return { selection: null };
-
-  const box = boundsOf(hit);
-  const corner = hit.shape === 'rect' ? cornerAt(box, pt.x, pt.y, 8) : null;
-  ed.drag = {
-    mode: corner ? 'resize' : 'move',
-    corner,
-    start: { x: pt.x, y: pt.y },
-    origin: hit.shape === 'poly' ? hit.points.map((p) => ({ ...p })) : { ...hit.rect },
-    target: hit,
-  };
-  return { selection: hit.id, mode: ed.drag.mode };
+  return { selection: null };
 }
 
 export function pointerMove(ed, pt) {
@@ -131,16 +177,42 @@ export function pointerMove(ed, pt) {
     return { moved: true };
   }
 
+  if (ed.drag.mode === 'vertex') {
+    const idx = ed.drag.index;
+    const pts = ed.drag.origin.map((p) => ({ x: p.x, y: p.y }));
+    if (pts[idx]) {
+      pts[idx] = {
+        x: Math.min(Math.max(pt.x, 0), ed.pageW),
+        y: Math.min(Math.max(pt.y, 0), ed.pageH),
+      };
+      t.points = pts;
+    }
+    return { vertex: true };
+  }
+
   const o = ed.drag.origin;
   let left = o.x;
   let top = o.y;
   let right = o.x + o.w;
   let bottom = o.y + o.h;
   const corner = ed.drag.corner;
-  if (corner.includes('w')) left = Math.min(pt.x, right - 2);
-  if (corner.includes('e')) right = Math.max(pt.x, left + 2);
-  if (corner.includes('n')) top = Math.min(pt.y, bottom - 2);
-  if (corner.includes('s')) bottom = Math.max(pt.y, top + 2);
+  const edge = ed.drag.edge;
+
+  if (corner) {
+    if (corner.includes('w')) left = Math.min(pt.x, right - 2);
+    if (corner.includes('e')) right = Math.max(pt.x, left + 2);
+    if (corner.includes('n')) top = Math.min(pt.y, bottom - 2);
+    if (corner.includes('s')) bottom = Math.max(pt.y, top + 2);
+  } else if (edge === 'n') {
+    top = Math.min(pt.y, bottom - 2);
+  } else if (edge === 's') {
+    bottom = Math.max(pt.y, top + 2);
+  } else if (edge === 'w') {
+    left = Math.min(pt.x, right - 2);
+  } else if (edge === 'e') {
+    right = Math.max(pt.x, left + 2);
+  }
+
   t.rect = clampRect({ x: left, y: top, w: right - left, h: bottom - top }, ed.pageW, ed.pageH);
   return { resized: true };
 }
