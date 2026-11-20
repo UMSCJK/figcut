@@ -30,6 +30,23 @@ export function renderZoomControl(opts) {
   plus.innerHTML = ICONS.plus;
   plus.setAttribute('aria-label', '放大');
 
+  const fitPage = doc.createElement('button');
+  fitPage.type = 'button';
+  fitPage.className = 'icon-btn';
+  fitPage.innerHTML = ICONS.fitPage;
+  fitPage.title = '适应页高 (f)';
+  fitPage.setAttribute('aria-label', '适应页高');
+
+  const fitWidth = doc.createElement('button');
+  fitWidth.type = 'button';
+  fitWidth.className = 'icon-btn';
+  fitWidth.innerHTML = ICONS.fitWidth;
+  fitWidth.title = '适应页宽 (w)';
+  fitWidth.setAttribute('aria-label', '适应页宽');
+
+  const sep = doc.createElement('span');
+  sep.className = 'zoom-sep';
+
   const menu = doc.createElement('select');
   menu.className = 'zoom-presets';
   menu.setAttribute('aria-label', '缩放预设');
@@ -40,7 +57,7 @@ export function renderZoomControl(opts) {
     menu.appendChild(o);
   }
 
-  box.append(minus, input, plus, menu);
+  box.append(minus, input, plus, sep, fitPage, fitWidth, menu);
   container.appendChild(box);
 
   const sync = () => {
@@ -53,6 +70,8 @@ export function renderZoomControl(opts) {
 
   minus.addEventListener('click', () => setScale(z, z.scale / 1.2));
   plus.addEventListener('click', () => setScale(z, z.scale * 1.2));
+  fitPage.addEventListener('click', () => opts.onFitPage && opts.onFitPage());
+  fitWidth.addEventListener('click', () => opts.onFitWidth && opts.onFitWidth());
   input.addEventListener('change', () => {
     const n = parseFloat(String(input.value).replace('%', ''));
     if (Number.isFinite(n) && n > 0) setScale(z, n / 100);

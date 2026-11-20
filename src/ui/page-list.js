@@ -1,4 +1,4 @@
-// 左栏页面列表：页码 + 每页标注数，当前页高亮并自动滚入视野
+// 左栏页面列表：缩略图 + 页码 + 标注数，当前页高亮
 // 状态：已实现。
 
 export function countByPage(regions) {
@@ -9,9 +9,11 @@ export function countByPage(regions) {
 
 export function renderPageList(host, opts) {
   const doc = host.ownerDocument;
-  const { pages, current, regions, onPick } = opts;
+  const { pages, current, regions, onPick, thumbFor } = opts;
   const counts = countByPage(regions || []);
+  const head = host.querySelector('.side-head');
   host.textContent = '';
+  if (head) host.appendChild(head);
 
   const list = doc.createElement('div');
   list.className = 'page-list';
@@ -21,6 +23,13 @@ export function renderPageList(host, opts) {
     row.type = 'button';
     row.className = 'page-item' + (p.no === current ? ' is-current' : '');
     row.dataset.page = String(p.no);
+    row.title = '第 ' + p.no + ' 页';
+
+    const thumb = thumbFor ? thumbFor(p.no) : null;
+    if (thumb) {
+      thumb.className = 'page-thumb';
+      row.appendChild(thumb);
+    }
 
     const num = doc.createElement('span');
     num.className = 'page-no';
@@ -43,7 +52,5 @@ export function markCurrent(host, no) {
   for (const row of host.querySelectorAll('.page-item')) {
     row.classList.toggle('is-current', Number(row.dataset.page) === no);
   }
-  const cur = host.querySelector('.page-item.is-current');
-  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   return no;
 }

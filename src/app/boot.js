@@ -40,7 +40,12 @@ export function boot(opts = {}) {
   const shell = createShell();
   const zoom = createZoom({ scale: 1 });
   const stack = createPageStack({ container: shell.canvas, zoom });
-  renderZoomControl({ container: shell.canvas, zoom });
+  renderZoomControl({
+    container: shell.canvas,
+    zoom,
+    onFitPage: () => setFit(zoom, 'page', fitDims()),
+    onFitWidth: () => setFit(zoom, 'width', fitDims()),
+  });
 
   const ed = createEditor({ pageW: 595, pageH: 842 });
   const hist = createHistory(JSON.stringify(ed.regions));
@@ -129,6 +134,7 @@ export function boot(opts = {}) {
   function applyColors() {
     applyTheme(theme, document, prefersDark());
     saveTheme(storage, theme);
+    if (typeof syncColorButtons === 'function') syncColorButtons();
     return theme;
   }
 
@@ -180,6 +186,23 @@ export function boot(opts = {}) {
     refresh();
   }
 
+  // 左栏缩略图：直接从已渲染的页位图缩一份
+  function thumbFor(no) {
+    const p = stack.pages.find((x) => x.no === no);
+    if (!p || !p.canvas || !p.canvas.width) return null;
+    const c = document.createElement('canvas');
+    c.width = 80;
+    c.height = 108;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 80, 108);
+    const k = Math.min(80 / p.canvas.width, 108 / p.canvas.height);
+    const w = p.canvas.width * k;
+    const h = p.canvas.height * k;
+    ctx.drawImage(p.canvas, (80 - w) / 2, (108 - h) / 2, w, h);
+    return c;
+  }
+
   function renderPanels() {
     const ov = overlays.get(ed.page);
     const pageW = ov ? ov.size.w : ed.pageW;
@@ -204,6 +227,7 @@ export function boot(opts = {}) {
         current: ed.page,
         regions: ed.regions,
         onPick: (no) => goPage(no),
+        thumbFor,
       });
     }
 
@@ -244,7 +268,7 @@ export function boot(opts = {}) {
   addButton(shell, 'left', '打开', async () => {
     const file = await pickFile();
     if (file) load(file);
-  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.open });
+  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.doc });
 
   const undoUi = () => {
     const prev = undo(hist);
@@ -305,15 +329,24 @@ export function boot(opts = {}) {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
 
-  addButton(shell, 'right', '配色', () => {
+  const themeBtn = addButton(shell, 'right', '配色', () => {
     cycleUi(theme);
     applyColors();
-  }, { title: '界面配色：跟随系统 → 浅色 → 深色', ariaLabel: '界面配色', icon: ICONS.uiTheme });
+  }, { title: '界面配色', ariaLabel: '界面配色', icon: ICONS.uiAuto });
 
-  addButton(shell, 'right', '反相', () => {
+  const invertBtn = addButton(shell, 'right', '反相', () => {
     cyclePdfPreview(theme);
     applyColors();
-  }, { title: 'PDF 预览：跟随界面 → 正常 → 反相 (Ctrl+I)', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+  }, { title: 'PDF 预览', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+
+  function syncColorButtons() {
+    const ui = theme.ui;
+    themeBtn.innerHTML = ui === 'light' ? ICONS.uiLight : ui === 'dark' ? ICONS.uiDark : ICONS.uiAuto;
+    themeBtn.title = '界面配色：' + (ui === 'auto' ? '跟随系统' : ui === 'light' ? '浅色' : '深色') + '（点一下切换）';
+    const inv = isInverted(theme, prefersDark());
+    invertBtn.classList.toggle('on', inv);
+    invertBtn.title = 'PDF 预览：' + (theme.pdf === 'auto' ? '跟随界面' : theme.pdf === 'normal' ? '正常' : '反相') + '（Ctrl+I）';
+  }
 
   addButton(shell, 'right', '导出', () => doExport(), {
     title: '导出 ZIP (Ctrl+E)',
@@ -562,6 +595,75 @@ export function boot(opts = {}) {
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => stack.applyZoom());
+
+  // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
+  const LAYOUT_KEY = 'figcut.layout';
+  const layout = (() => {
+    try {
+      return JSON.parse((storage && storage.getItem(LAYOUT_KEY)) || '{}') || {};
+    } catch (e) {
+      return {};
+    }
+  })();
+  const saveLayout = () => {
+    try {
+      storage && storage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+    } catch (e) {
+      /* 存不下无所谓 */
+    }
+  };
+
+  function applyLayout() {
+    const root = document.documentElement;
+    if (layout.side) root.style.setProperty('--w-side', layout.side + 'px');
+    if (layout.panel) root.style.setProperty('--w-panel', layout.panel + 'px');
+    shell.panelLeft.classList.toggle('is-collapsed', !!layout.leftCollapsed);
+    shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
+  }
+  applyLayout();
+
+  function bindSplitter(el, side) {
+    if (!el) return;
+    let start = null;
+    el.addEventListener('pointerdown', (ev) => {
+      const base = side === 'left' ? shell.panelLeft.getBoundingClientRect().width : shell.panelRight.getBoundingClientRect().width;
+      start = { x: ev.clientX, w: base };
+      el.classList.add('is-dragging');
+      if (el.setPointerCapture) el.setPointerCapture(ev.pointerId);
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!start) return;
+      const dx = ev.clientX - start.x;
+      const raw = side === 'left' ? start.w + dx : start.w - dx;
+      const min = side === 'left' ? 120 : 160;
+      const max = side === 'left' ? 360 : 460;
+      const w = Math.round(Math.max(min, Math.min(max, raw)));
+      if (side === 'left') {
+        layout.side = w;
+        layout.leftCollapsed = false;
+      } else {
+        layout.panel = w;
+        layout.rightCollapsed = false;
+      }
+      applyLayout();
+      saveLayout();
+    });
+    const end = () => {
+      start = null;
+      el.classList.remove('is-dragging');
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('dblclick', () => {
+      if (side === 'left') layout.leftCollapsed = !layout.leftCollapsed;
+      else layout.rightCollapsed = !layout.rightCollapsed;
+      applyLayout();
+      saveLayout();
+    });
+  }
+
+  bindSplitter(document.getElementById('split-left'), 'left');
+  bindSplitter(document.getElementById('split-right'), 'right');
 
   // 未捕获异常进底部横幅，不覆盖空状态，10 秒后自己消失
   if (typeof window !== 'undefined') {

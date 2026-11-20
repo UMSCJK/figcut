@@ -182,13 +182,25 @@ button { cursor: pointer; }
 
 .body {
   display: grid;
-  grid-template-columns: var(--w-side) minmax(0, 1fr) var(--w-panel);
+  grid-template-columns: var(--w-side) 5px minmax(0, 1fr) 5px var(--w-panel);
   min-height: 0;
 }
 
 .sidebar, .panel { min-height: 0; overflow: auto; background: var(--sidebar); }
 .sidebar { border-right: 1px solid var(--line); }
 .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+
+.sidebar.is-collapsed, .panel.is-collapsed { display: none; }
+
+.splitter { position: relative; cursor: col-resize; background: transparent; }
+.splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.splitter:hover::after, .splitter.is-dragging::after { background: var(--accent); opacity: 0.5; }
 
 .side-head {
   padding: 9px 12px 6px;
@@ -308,12 +320,19 @@ button { cursor: pointer; }
 
 .zoom-presets {
   height: 22px;
+  padding: 0 2px;
   border: 0;
   border-radius: 4px;
-  background: transparent;
-  color: var(--text-2);
+  background: var(--card);
+  color: var(--text);
   font-size: 11.5px;
+  cursor: pointer;
 }
+
+.zoom-presets:hover { background: var(--hover); }
+.zoom-presets option { background: var(--card); color: var(--text); }
+
+.zoom-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--line); }
 
 /* ---------- 空状态 ---------- */
 
@@ -340,8 +359,9 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 28px;
-  padding: 0 8px;
+  gap: 8px;
+  min-height: 62px;
+  padding: 4px 8px;
   border: 0;
   border-radius: var(--r-ctl);
   background: transparent;
@@ -349,6 +369,17 @@ button { cursor: pointer; }
   font-size: 12px;
   text-align: left;
 }
+
+.page-thumb {
+  width: 40px;
+  height: 54px;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.page-no { flex: 1; }
 
 .page-item:hover { background: var(--hover); }
 .page-item.is-current { background: var(--sel); color: var(--text); font-weight: 600; }
@@ -506,19 +537,20 @@ button { cursor: pointer; }
     <div class="title-block"><div class="title" id="topbar-title">figcut</div></div>
     <div class="cluster cluster-right" id="topbar-right"></div>
   </header>
-  <main class="body">
-    <aside class="sidebar" id="panel-left"><div class="side-head">页面</div></aside>
+  <main class="body" id="body">
+    <aside class="sidebar" id="panel-left"><div class="side-head" id="side-head">页面</div></aside>
+    <div class="splitter" id="split-left" title="拖动调整宽度，双击折叠"></div>
     <div class="canvas" id="canvas">
       <div class="empty" id="empty">
         <div class="big">把 PDF 拖进来</div>
         <div class="small">或点左上角「打开」</div>
       </div>
     </div>
+    <div class="splitter" id="split-right" title="拖动调整宽度，双击折叠"></div>
     <aside class="panel" id="panel-right"></aside>
   </main>
   <div class="banner" id="banner" hidden></div>
 </div>
-<!-- pdf.js 保持外部引用：file:// 下 classic script 可加载 -->
 <script src="vendor/pdfjs/pdf.min.js"></script>
 <script>
 (function () {
@@ -922,13 +954,19 @@ const ICONS = {
   export: wrap('<path d="M8 2.4v7"/><path d="M5.2 6.6L8 9.4l2.8-2.8"/><path d="M3 12.4h10"/>'),
   settings: wrap('<path d="M2.4 5h11.2M2.4 11h11.2"/><circle cx="6.2" cy="5" r="1.6"/><circle cx="10" cy="11" r="1.6"/>'),
   uiTheme: wrap('<circle cx="8" cy="8" r="5.6"/><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor" stroke="none"/>'),
-  invert: wrap('<circle cx="8" cy="8" r="5.6"/><path d="M8 2.4v11.2" /><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor" stroke="none"/>'),
+  invert: wrap('<rect x="2.6" y="3" width="10.8" height="10" rx="1.2"/><path d="M8 3v10"/><path d="M8 3h4.2a1.2 1.2 0 0 1 1.2 1.2v7.6a1.2 1.2 0 0 1-1.2 1.2H8z" fill="currentColor" stroke="none"/>'),
   select: wrap('<path d="M4 2.8l7.4 4.6-3 .8-.8 3z"/>'),
   rect: wrap('<rect x="2.8" y="3.6" width="10.4" height="8.8" rx="1"/>'),
   poly: wrap('<path d="M8 2.4l5.2 3.8-2 6.2H4.8l-2-6.2z"/>'),
   trash: wrap('<path d="M3.4 4.4h9.2"/><path d="M6.4 4.4V3.2h3.2v1.2"/><path d="M4.9 4.4l.5 8.1h5.2l.5-8.1"/>'),
   minus: wrap('<path d="M3.6 8h8.8"/>'),
   plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
+  fitWidth: wrap('<rect x="2.4" y="3.2" width="4.2" height="9.6" rx="0.6"/><path d="M9 8h4.4M11.6 5.6L13.8 8l-2.2 2.4"/>'),
+  fitPage: wrap('<rect x="4" y="2.6" width="8" height="10.8" rx="0.8"/><path d="M6 5.4h4M6 8h4M6 10.6h4"/>'),
+  uiAuto: wrap('<circle cx="8" cy="8" r="5.4"/><path d="M8 2.6v10.8" stroke-dasharray="1.5 1.6"/>'),
+  uiLight: wrap('<circle cx="8" cy="8" r="3"/><path d="M8 1.8v1.6M8 12.6V14.2M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1"/>'),
+  uiDark: wrap('<path d="M13 9.2A5.4 5.4 0 0 1 6.8 3a5.4 5.4 0 1 0 6.2 6.2z"/>'),
+  doc: wrap('<path d="M3.6 2.4h5.2l3.6 3.6v7.6H3.6z"/><path d="M8.8 2.4v3.6h3.6"/>'),
 };
 
 function icon(name, opts) {
@@ -968,6 +1006,23 @@ function renderZoomControl(opts) {
   plus.innerHTML = ICONS.plus;
   plus.setAttribute('aria-label', '放大');
 
+  const fitPage = doc.createElement('button');
+  fitPage.type = 'button';
+  fitPage.className = 'icon-btn';
+  fitPage.innerHTML = ICONS.fitPage;
+  fitPage.title = '适应页高 (f)';
+  fitPage.setAttribute('aria-label', '适应页高');
+
+  const fitWidth = doc.createElement('button');
+  fitWidth.type = 'button';
+  fitWidth.className = 'icon-btn';
+  fitWidth.innerHTML = ICONS.fitWidth;
+  fitWidth.title = '适应页宽 (w)';
+  fitWidth.setAttribute('aria-label', '适应页宽');
+
+  const sep = doc.createElement('span');
+  sep.className = 'zoom-sep';
+
   const menu = doc.createElement('select');
   menu.className = 'zoom-presets';
   menu.setAttribute('aria-label', '缩放预设');
@@ -978,7 +1033,7 @@ function renderZoomControl(opts) {
     menu.appendChild(o);
   }
 
-  box.append(minus, input, plus, menu);
+  box.append(minus, input, plus, sep, fitPage, fitWidth, menu);
   container.appendChild(box);
 
   const sync = () => {
@@ -991,6 +1046,8 @@ function renderZoomControl(opts) {
 
   minus.addEventListener('click', () => setScale(z, z.scale / 1.2));
   plus.addEventListener('click', () => setScale(z, z.scale * 1.2));
+  fitPage.addEventListener('click', () => opts.onFitPage && opts.onFitPage());
+  fitWidth.addEventListener('click', () => opts.onFitWidth && opts.onFitWidth());
   input.addEventListener('change', () => {
     const n = parseFloat(String(input.value).replace('%', ''));
     if (Number.isFinite(n) && n > 0) setScale(z, n / 100);
@@ -1858,7 +1915,7 @@ function renderRegions(host, opts) {
 }
 
 // ---- src/ui/page-list.js ----
-// 左栏页面列表：页码 + 每页标注数，当前页高亮并自动滚入视野
+// 左栏页面列表：缩略图 + 页码 + 标注数，当前页高亮
 // 状态：已实现。
 
 function countByPage(regions) {
@@ -1869,9 +1926,11 @@ function countByPage(regions) {
 
 function renderPageList(host, opts) {
   const doc = host.ownerDocument;
-  const { pages, current, regions, onPick } = opts;
+  const { pages, current, regions, onPick, thumbFor } = opts;
   const counts = countByPage(regions || []);
+  const head = host.querySelector('.side-head');
   host.textContent = '';
+  if (head) host.appendChild(head);
 
   const list = doc.createElement('div');
   list.className = 'page-list';
@@ -1881,6 +1940,13 @@ function renderPageList(host, opts) {
     row.type = 'button';
     row.className = 'page-item' + (p.no === current ? ' is-current' : '');
     row.dataset.page = String(p.no);
+    row.title = '第 ' + p.no + ' 页';
+
+    const thumb = thumbFor ? thumbFor(p.no) : null;
+    if (thumb) {
+      thumb.className = 'page-thumb';
+      row.appendChild(thumb);
+    }
 
     const num = doc.createElement('span');
     num.className = 'page-no';
@@ -1903,8 +1969,6 @@ function markCurrent(host, no) {
   for (const row of host.querySelectorAll('.page-item')) {
     row.classList.toggle('is-current', Number(row.dataset.page) === no);
   }
-  const cur = host.querySelector('.page-item.is-current');
-  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   return no;
 }
 
@@ -3235,7 +3299,12 @@ function boot(opts = {}) {
   const shell = createShell();
   const zoom = createZoom({ scale: 1 });
   const stack = createPageStack({ container: shell.canvas, zoom });
-  renderZoomControl({ container: shell.canvas, zoom });
+  renderZoomControl({
+    container: shell.canvas,
+    zoom,
+    onFitPage: () => setFit(zoom, 'page', fitDims()),
+    onFitWidth: () => setFit(zoom, 'width', fitDims()),
+  });
 
   const ed = createEditor({ pageW: 595, pageH: 842 });
   const hist = createHistory(JSON.stringify(ed.regions));
@@ -3324,6 +3393,7 @@ function boot(opts = {}) {
   function applyColors() {
     applyTheme(theme, document, prefersDark());
     saveTheme(storage, theme);
+    if (typeof syncColorButtons === 'function') syncColorButtons();
     return theme;
   }
 
@@ -3375,6 +3445,23 @@ function boot(opts = {}) {
     refresh();
   }
 
+  // 左栏缩略图：直接从已渲染的页位图缩一份
+  function thumbFor(no) {
+    const p = stack.pages.find((x) => x.no === no);
+    if (!p || !p.canvas || !p.canvas.width) return null;
+    const c = document.createElement('canvas');
+    c.width = 80;
+    c.height = 108;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 80, 108);
+    const k = Math.min(80 / p.canvas.width, 108 / p.canvas.height);
+    const w = p.canvas.width * k;
+    const h = p.canvas.height * k;
+    ctx.drawImage(p.canvas, (80 - w) / 2, (108 - h) / 2, w, h);
+    return c;
+  }
+
   function renderPanels() {
     const ov = overlays.get(ed.page);
     const pageW = ov ? ov.size.w : ed.pageW;
@@ -3399,6 +3486,7 @@ function boot(opts = {}) {
         current: ed.page,
         regions: ed.regions,
         onPick: (no) => goPage(no),
+        thumbFor,
       });
     }
 
@@ -3439,7 +3527,7 @@ function boot(opts = {}) {
   addButton(shell, 'left', '打开', async () => {
     const file = await pickFile();
     if (file) load(file);
-  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.open });
+  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.doc });
 
   const undoUi = () => {
     const prev = undo(hist);
@@ -3500,15 +3588,24 @@ function boot(opts = {}) {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
 
-  addButton(shell, 'right', '配色', () => {
+  const themeBtn = addButton(shell, 'right', '配色', () => {
     cycleUi(theme);
     applyColors();
-  }, { title: '界面配色：跟随系统 → 浅色 → 深色', ariaLabel: '界面配色', icon: ICONS.uiTheme });
+  }, { title: '界面配色', ariaLabel: '界面配色', icon: ICONS.uiAuto });
 
-  addButton(shell, 'right', '反相', () => {
+  const invertBtn = addButton(shell, 'right', '反相', () => {
     cyclePdfPreview(theme);
     applyColors();
-  }, { title: 'PDF 预览：跟随界面 → 正常 → 反相 (Ctrl+I)', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+  }, { title: 'PDF 预览', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+
+  function syncColorButtons() {
+    const ui = theme.ui;
+    themeBtn.innerHTML = ui === 'light' ? ICONS.uiLight : ui === 'dark' ? ICONS.uiDark : ICONS.uiAuto;
+    themeBtn.title = '界面配色：' + (ui === 'auto' ? '跟随系统' : ui === 'light' ? '浅色' : '深色') + '（点一下切换）';
+    const inv = isInverted(theme, prefersDark());
+    invertBtn.classList.toggle('on', inv);
+    invertBtn.title = 'PDF 预览：' + (theme.pdf === 'auto' ? '跟随界面' : theme.pdf === 'normal' ? '正常' : '反相') + '（Ctrl+I）';
+  }
 
   addButton(shell, 'right', '导出', () => doExport(), {
     title: '导出 ZIP (Ctrl+E)',
@@ -3757,6 +3854,75 @@ function boot(opts = {}) {
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => stack.applyZoom());
+
+  // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
+  const LAYOUT_KEY = 'figcut.layout';
+  const layout = (() => {
+    try {
+      return JSON.parse((storage && storage.getItem(LAYOUT_KEY)) || '{}') || {};
+    } catch (e) {
+      return {};
+    }
+  })();
+  const saveLayout = () => {
+    try {
+      storage && storage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+    } catch (e) {
+      /* 存不下无所谓 */
+    }
+  };
+
+  function applyLayout() {
+    const root = document.documentElement;
+    if (layout.side) root.style.setProperty('--w-side', layout.side + 'px');
+    if (layout.panel) root.style.setProperty('--w-panel', layout.panel + 'px');
+    shell.panelLeft.classList.toggle('is-collapsed', !!layout.leftCollapsed);
+    shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
+  }
+  applyLayout();
+
+  function bindSplitter(el, side) {
+    if (!el) return;
+    let start = null;
+    el.addEventListener('pointerdown', (ev) => {
+      const base = side === 'left' ? shell.panelLeft.getBoundingClientRect().width : shell.panelRight.getBoundingClientRect().width;
+      start = { x: ev.clientX, w: base };
+      el.classList.add('is-dragging');
+      if (el.setPointerCapture) el.setPointerCapture(ev.pointerId);
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!start) return;
+      const dx = ev.clientX - start.x;
+      const raw = side === 'left' ? start.w + dx : start.w - dx;
+      const min = side === 'left' ? 120 : 160;
+      const max = side === 'left' ? 360 : 460;
+      const w = Math.round(Math.max(min, Math.min(max, raw)));
+      if (side === 'left') {
+        layout.side = w;
+        layout.leftCollapsed = false;
+      } else {
+        layout.panel = w;
+        layout.rightCollapsed = false;
+      }
+      applyLayout();
+      saveLayout();
+    });
+    const end = () => {
+      start = null;
+      el.classList.remove('is-dragging');
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('dblclick', () => {
+      if (side === 'left') layout.leftCollapsed = !layout.leftCollapsed;
+      else layout.rightCollapsed = !layout.rightCollapsed;
+      applyLayout();
+      saveLayout();
+    });
+  }
+
+  bindSplitter(document.getElementById('split-left'), 'left');
+  bindSplitter(document.getElementById('split-right'), 'right');
 
   // 未捕获异常进底部横幅，不覆盖空状态，10 秒后自己消失
   if (typeof window !== 'undefined') {
