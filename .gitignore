@@ -1,0 +1,17 @@
+# 交付物与临时产物
+dist/
+figure-workbench.html
+figures_*.zip
+tmp/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 测试语料（受版权保护的试卷不进仓库）
+*.pdf
+
+# 系统
+.DS_Store
+node_modules/
