@@ -6,6 +6,9 @@ import { createZoom, subscribe } from '../view/zoom.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
 import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
+import { createPreview, renderPreview } from '../ui/preview.js';
+import { renderRegions } from '../ui/region-list.js';
+import { boundsOf } from '../view/editor.js';
 import {
   createEditor,
   setTool,
@@ -82,6 +85,63 @@ export function boot(opts = {}) {
   const snapshot = () => JSON.stringify(ed.regions);
   const record = (key) => commit(hist, snapshot(), key ? { key } : {});
 
+  // 右栏：常驻预览 + 区域列表
+  const doc = shell.canvas.ownerDocument;
+  const previewHost = doc.createElement('div');
+  previewHost.className = 'preview-host';
+  const listHost = doc.createElement('div');
+  listHost.className = 'region-list';
+  shell.panelRight.append(previewHost, listHost);
+  const preview = createPreview(previewHost);
+
+  function selectRegion(region) {
+    if (!region) {
+      ed.selectedId = null;
+    } else {
+      ed.selectedId = region.id;
+      if (region.page !== ed.page) setPage(ed, region.page);
+      ed.pageW = overlays.get(region.page) ? overlays.get(region.page).size.w : ed.pageW;
+      ed.pageH = overlays.get(region.page) ? overlays.get(region.page).size.h : ed.pageH;
+      const wrap = stack.pages.find((p) => p.no === region.page);
+      if (wrap && wrap.wrap.scrollIntoView) wrap.wrap.scrollIntoView({ block: 'nearest' });
+    }
+    refresh();
+  }
+
+  function renderPanels() {
+    const ov = overlays.get(ed.page);
+    const pageW = ov ? ov.size.w : ed.pageW;
+    const pageH = ov ? ov.size.h : ed.pageH;
+    const stackPage = stack.pages.find((p) => p.no === ed.page);
+    const source = stackPage ? stackPage.canvas : null;
+    const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === ed.page);
+
+    if (sel) {
+      const b = boundsOf(sel);
+      renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
+    } else {
+      renderPreview(preview, { source, pageW, pageH, selectedId: null, regions: regionsOfPage(ed.regions, ed.page) });
+    }
+
+    renderRegions(listHost, {
+      regions: ed.regions,
+      page: ed.page,
+      selectedId: ed.selectedId,
+      onSelect: selectRegion,
+      onChange: (region, meta) => {
+        if (!meta || !meta.quiet) record(null);
+        refresh();
+      },
+      onDelete: (region) => {
+        const idx = ed.regions.indexOf(region);
+        if (idx >= 0) ed.regions.splice(idx, 1);
+        if (ed.selectedId === region.id) ed.selectedId = null;
+        record(null);
+        refresh();
+      },
+    });
+  }
+
   function render() {
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
@@ -89,7 +149,10 @@ export function boot(opts = {}) {
         draft: page === ed.page ? ed.draft : null,
       });
     }
+    renderPanels();
   }
+
+  const refresh = render;
 
   // 顶栏左簇：打开 → 撤销 → 重做（工具组是画布左上的浮层，不在这儿）
   addButton(shell, 'left', '打开', async () => {
@@ -117,7 +180,6 @@ export function boot(opts = {}) {
   addButton(shell, 'right', '导出', () => doExport(), { title: '导出 ZIP (Ctrl+E)', ariaLabel: '导出' });
 
   // 浮动工具组：画布左上
-  const doc = shell.canvas.ownerDocument;
   const toolGroup = doc.createElement('div');
   toolGroup.className = 'tool-group';
   shell.canvas.appendChild(toolGroup);
