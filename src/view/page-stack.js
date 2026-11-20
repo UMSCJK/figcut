@@ -27,13 +27,15 @@ export function createPageStack(opts) {
   // 缩放立刻给视觉反馈（CSS transform），真正的重绘防抖，避免 trackpad 缩放时闪
   let visualScale = null;
   function setVisualScale(scale) {
-    const base = pages.find((p) => p.renderedScale)?.renderedScale;
-    if (!base) return;
     visualScale = scale;
-    const k = scale / base;
+    // 直接改 canvas 的 CSS 尺寸：浏览器做一次便宜的位图拉伸，
+    // 比 transform 把每张位图重新栅格化快得多
     for (const p of pages) {
-      p.wrap.style.transformOrigin = '0 0';
-      p.wrap.style.transform = Math.abs(k - 1) < 0.002 ? '' : 'scale(' + k + ')';
+      const vp = p.page.getViewport({ scale });
+      p.canvas.style.width = Math.round(vp.width) + 'px';
+      p.canvas.style.height = Math.round(vp.height) + 'px';
+      p.overlay.style.width = Math.round(vp.width) + 'px';
+      p.overlay.style.height = Math.round(vp.height) + 'px';
     }
   }
 
@@ -50,7 +52,7 @@ export function createPageStack(opts) {
     if (!pdfDoc) return;
     const my = ++token;
     const scale = zoom.scale;
-    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    const dpr = Math.min(1.5, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
 
     const host = container.getBoundingClientRect();
     const near = (p) => {
@@ -89,6 +91,8 @@ export function createPageStack(opts) {
       const rowEl = doc.createElement('div');
       rowEl.className = 'page-row';
       rowEl.dataset.row = String(i);
+      // 书式：单页那行靠右/靠左，别和下面的双页行错开
+      if (view.dual && row.length === 1) rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
       // 书式：第 1 页单独在右；末页落单时在左
       if (view.dual && row.length === 1) {
         rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';

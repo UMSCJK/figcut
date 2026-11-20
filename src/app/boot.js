@@ -580,6 +580,18 @@ export function boot(opts = {}) {
     }
     if (!drawing) {
       shell.canvas.style.cursor = hoverCursor(ev);
+      // 正在画多边形/矩形（还没松手）时，鼠标移动也要实时预览
+      if (ed.draft) {
+        const hit = pointOf(ev);
+        if (hit && hit.no === ed.page) {
+          lastPt = hit.pt;
+          if (ed.draft.shape === 'rect') {
+            ed.draft.x1 = hit.pt.x;
+            ed.draft.y1 = hit.pt.y;
+          }
+          render();
+        }
+      }
       return;
     }
     if (state !== 'ready') return;
@@ -793,10 +805,21 @@ export function boot(opts = {}) {
     }
   };
 
-  // 自动缩放：窗口变化时重新适应页面
-  window.addEventListener('resize', () => {
-    if (zoom.auto) setFit(zoom, 'page', fitDims());
-  });
+  // 适应页面/适应页宽/自动：窗口或侧栏一变就重新算，别等用户再点一次
+  function refitIfNeeded() {
+    if (!(zoom.auto || zoom.mode === 'fit-page' || zoom.mode === 'fit-width')) return;
+    const auto = zoom.auto;
+    setFit(zoom, zoom.mode === 'fit-width' ? 'width' : 'page', fitDims());
+    zoom.auto = auto;
+  }
+
+  let refitTimer = 0;
+  const scheduleRefit = () => {
+    clearTimeout(refitTimer);
+    refitTimer = setTimeout(refitIfNeeded, 60);
+  };
+
+  window.addEventListener('resize', scheduleRefit);
 
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
@@ -920,6 +943,7 @@ export function boot(opts = {}) {
       updateColsBtn && updateColsBtn();
       lastListSig = '';
       render();
+      scheduleRefit();
       saveLayout();
     });
     const end = () => {
@@ -988,6 +1012,7 @@ export function boot(opts = {}) {
       applyLayout();
       saveLayout();
       leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
+      scheduleRefit();
     });
   }
 
@@ -1001,6 +1026,7 @@ export function boot(opts = {}) {
       applyLayout();
       saveLayout();
       rightToggle.textContent = layout.rightCollapsed ? '‹' : '›';
+      scheduleRefit();
     });
   }
 

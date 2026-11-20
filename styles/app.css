@@ -119,7 +119,7 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
   min-height: 0;
 }
 
-.sidebar, .panel { min-height: 0; overflow: auto; background: var(--sidebar); }
+.sidebar, .panel { min-height: 0; overflow-y: auto; overflow-x: hidden; background: var(--sidebar); }
 .sidebar { border-right: 1px solid var(--line); }
 .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
 
@@ -165,7 +165,8 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .pages {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 56px 24px 44px;
   display: flex;
   flex-direction: column;
@@ -174,7 +175,17 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
   overflow-anchor: none;
 }
 
-.page-row { display: flex; align-items: flex-start; justify-content: center; gap: 20px; }
+.page-row {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 20px;
+  max-width: 100%;
+}
+
+.page-row[data-single="right"] > .page { grid-column: 2; }
+.page-row[data-single="left"] > .page { grid-column: 1; }
 
 .page {
   position: relative;

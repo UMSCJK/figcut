@@ -190,7 +190,7 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
   min-height: 0;
 }
 
-.sidebar, .panel { min-height: 0; overflow: auto; background: var(--sidebar); }
+.sidebar, .panel { min-height: 0; overflow-y: auto; overflow-x: hidden; background: var(--sidebar); }
 .sidebar { border-right: 1px solid var(--line); }
 .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
 
@@ -236,7 +236,8 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
 .pages {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 56px 24px 44px;
   display: flex;
   flex-direction: column;
@@ -245,7 +246,17 @@ input, textarea, .preview-canvas { user-select: text; -webkit-user-select: text;
   overflow-anchor: none;
 }
 
-.page-row { display: flex; align-items: flex-start; justify-content: center; gap: 20px; }
+.page-row {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 20px;
+  max-width: 100%;
+}
+
+.page-row[data-single="right"] > .page { grid-column: 2; }
+.page-row[data-single="left"] > .page { grid-column: 1; }
 
 .page {
   position: relative;
@@ -1501,13 +1512,15 @@ function createPageStack(opts) {
   // 缩放立刻给视觉反馈（CSS transform），真正的重绘防抖，避免 trackpad 缩放时闪
   let visualScale = null;
   function setVisualScale(scale) {
-    const base = pages.find((p) => p.renderedScale)?.renderedScale;
-    if (!base) return;
     visualScale = scale;
-    const k = scale / base;
+    // 直接改 canvas 的 CSS 尺寸：浏览器做一次便宜的位图拉伸，
+    // 比 transform 把每张位图重新栅格化快得多
     for (const p of pages) {
-      p.wrap.style.transformOrigin = '0 0';
-      p.wrap.style.transform = Math.abs(k - 1) < 0.002 ? '' : 'scale(' + k + ')';
+      const vp = p.page.getViewport({ scale });
+      p.canvas.style.width = Math.round(vp.width) + 'px';
+      p.canvas.style.height = Math.round(vp.height) + 'px';
+      p.overlay.style.width = Math.round(vp.width) + 'px';
+      p.overlay.style.height = Math.round(vp.height) + 'px';
     }
   }
 
@@ -1524,7 +1537,7 @@ function createPageStack(opts) {
     if (!pdfDoc) return;
     const my = ++token;
     const scale = zoom.scale;
-    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    const dpr = Math.min(1.5, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
 
     const host = container.getBoundingClientRect();
     const near = (p) => {
@@ -1563,6 +1576,8 @@ function createPageStack(opts) {
       const rowEl = doc.createElement('div');
       rowEl.className = 'page-row';
       rowEl.dataset.row = String(i);
+      // 书式：单页那行靠右/靠左，别和下面的双页行错开
+      if (view.dual && row.length === 1) rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
       // 书式：第 1 页单独在右；末页落单时在左
       if (view.dual && row.length === 1) {
         rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
@@ -1934,7 +1949,14 @@ function pointerDown(ed, pt) {
   ed.selectedId = null;
 
   if (ed.tool === 'rect') {
-    ed.draft = { shape: 'rect', x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+    // 两次点击画矩形：第一次落角，第二次对角即成形（拖动也照样可用）
+    if (ed.draft && ed.draft.shape === 'rect') {
+      ed.draft.clicked = true;
+      ed.draft.x1 = pt.x;
+      ed.draft.y1 = pt.y;
+      return { draft: true, second: true };
+    }
+    ed.draft = { shape: 'rect', x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y, clicked: false };
     return { draft: true };
   }
 
@@ -2011,6 +2033,10 @@ function pointerMove(ed, pt) {
 
 function pointerUp(ed, pt) {
   if (ed.draft && ed.draft.shape === 'rect') {
+    const moved = Math.hypot(pt.x - ed.draft.x0, pt.y - ed.draft.y0);
+    // 点了一下没拖：等着点第二个对角点
+    if (!ed.draft.clicked && moved < 2) return null;
+
     const r = rectFromPoints(ed.draft.x0, ed.draft.y0, ed.draft.x1, ed.draft.y1);
     ed.draft = null;
     if (!r) return null;
@@ -4528,6 +4554,18 @@ function boot(opts = {}) {
     }
     if (!drawing) {
       shell.canvas.style.cursor = hoverCursor(ev);
+      // 正在画多边形/矩形（还没松手）时，鼠标移动也要实时预览
+      if (ed.draft) {
+        const hit = pointOf(ev);
+        if (hit && hit.no === ed.page) {
+          lastPt = hit.pt;
+          if (ed.draft.shape === 'rect') {
+            ed.draft.x1 = hit.pt.x;
+            ed.draft.y1 = hit.pt.y;
+          }
+          render();
+        }
+      }
       return;
     }
     if (state !== 'ready') return;
@@ -4741,10 +4779,21 @@ function boot(opts = {}) {
     }
   };
 
-  // 自动缩放：窗口变化时重新适应页面
-  window.addEventListener('resize', () => {
-    if (zoom.auto) setFit(zoom, 'page', fitDims());
-  });
+  // 适应页面/适应页宽/自动：窗口或侧栏一变就重新算，别等用户再点一次
+  function refitIfNeeded() {
+    if (!(zoom.auto || zoom.mode === 'fit-page' || zoom.mode === 'fit-width')) return;
+    const auto = zoom.auto;
+    setFit(zoom, zoom.mode === 'fit-width' ? 'width' : 'page', fitDims());
+    zoom.auto = auto;
+  }
+
+  let refitTimer = 0;
+  const scheduleRefit = () => {
+    clearTimeout(refitTimer);
+    refitTimer = setTimeout(refitIfNeeded, 60);
+  };
+
+  window.addEventListener('resize', scheduleRefit);
 
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
@@ -4868,6 +4917,7 @@ function boot(opts = {}) {
       updateColsBtn && updateColsBtn();
       lastListSig = '';
       render();
+      scheduleRefit();
       saveLayout();
     });
     const end = () => {
@@ -4936,6 +4986,7 @@ function boot(opts = {}) {
       applyLayout();
       saveLayout();
       leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
+      scheduleRefit();
     });
   }
 
@@ -4949,6 +5000,7 @@ function boot(opts = {}) {
       applyLayout();
       saveLayout();
       rightToggle.textContent = layout.rightCollapsed ? '‹' : '›';
+      scheduleRefit();
     });
   }
 

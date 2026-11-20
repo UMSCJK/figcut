@@ -142,7 +142,14 @@ export function pointerDown(ed, pt) {
   ed.selectedId = null;
 
   if (ed.tool === 'rect') {
-    ed.draft = { shape: 'rect', x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+    // 两次点击画矩形：第一次落角，第二次对角即成形（拖动也照样可用）
+    if (ed.draft && ed.draft.shape === 'rect') {
+      ed.draft.clicked = true;
+      ed.draft.x1 = pt.x;
+      ed.draft.y1 = pt.y;
+      return { draft: true, second: true };
+    }
+    ed.draft = { shape: 'rect', x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y, clicked: false };
     return { draft: true };
   }
 
@@ -219,6 +226,10 @@ export function pointerMove(ed, pt) {
 
 export function pointerUp(ed, pt) {
   if (ed.draft && ed.draft.shape === 'rect') {
+    const moved = Math.hypot(pt.x - ed.draft.x0, pt.y - ed.draft.y0);
+    // 点了一下没拖：等着点第二个对角点
+    if (!ed.draft.clicked && moved < 2) return null;
+
     const r = rectFromPoints(ed.draft.x0, ed.draft.y0, ed.draft.x1, ed.draft.y1);
     ed.draft = null;
     if (!r) return null;
