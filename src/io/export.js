@@ -45,8 +45,24 @@ export function cropRgba(image, boxPx, marginPx = 0) {
   return { width: w, height: h, data: out };
 }
 
-// 按导出像素矩形精确裁切（白界框 + 边距已经算好，四边保证纯白）。
-export function renderPngPx(image, pxRect) {
+// 多边形在这个高度上的 x 跨度（pt），偶奇规则
+export function polySpansAt(poly, y) {
+  const xs = [];
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i, i += 1) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > y === b.y > y) continue;
+    xs.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
+  }
+  xs.sort((p1, p2) => p1 - p2);
+  const out = [];
+  for (let k = 0; k + 1 < xs.length; k += 2) out.push([xs[k], xs[k + 1]]);
+  return out;
+}
+
+// 按导出像素矩形精确裁切；给了多边形就把多边形外涂白（v2 的 destination-in）。
+export function cropPxRgba(image, pxRect, opts = {}) {
   const [x0, y0, x1, y1] = pxRect;
   const w = Math.max(1, x1 - x0);
   const h = Math.max(1, y1 - y0);
@@ -66,7 +82,35 @@ export function renderPngPx(image, pxRect) {
       out[d + 3] = 255;
     }
   }
-  return encodePng({ width: w, height: h, data: out });
+  // 多边形蒙版：多边形外的像素一律涂白
+  const poly = opts.poly;
+  const scale = opts.scale;
+  if (poly && poly.length >= 3 && scale > 0) {
+    for (let y = 0; y < h; y += 1) {
+      const yc = (y0 + y + 0.5) / scale;
+      const spans = polySpansAt(poly, yc);
+      let cursor = 0;
+      for (const [xa, xb] of spans) {
+        const a = Math.max(0, Math.ceil(xa * scale) - x0);
+        const b = Math.min(w, Math.floor(xb * scale) - x0);
+        for (let x = cursor; x < a && x < w; x += 1) {
+          const d = (y * w + x) * 4;
+          out[d] = 255; out[d + 1] = 255; out[d + 2] = 255;
+        }
+        if (b > cursor) cursor = b;
+      }
+      for (let x = Math.max(cursor, 0); x < w; x += 1) {
+        const d = (y * w + x) * 4;
+        out[d] = 255; out[d + 1] = 255; out[d + 2] = 255;
+      }
+    }
+  }
+
+  return { width: w, height: h, data: out };
+}
+
+export function renderPngPx(image, pxRect, opts = {}) {
+  return encodePng(cropPxRgba(image, pxRect, opts));
 }
 
 // 不重采样：页面位图必须恰好是 dpi/72 px/pt 渲出来的，否则直接报错。

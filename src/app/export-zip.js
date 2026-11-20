@@ -72,7 +72,8 @@ export async function exportZip(input) {
       const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
       const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
-      const bytes = renderPngPx(hires, crop.px);
+      const shape = item.region.shape === 'poly' ? item.region.points : null;
+      const bytes = renderPngPx(hires, crop.px, shape ? { poly: shape, scale } : {});
       addFile(zip, item.name, bytes);
       manifest.push({
         name: item.name,
