@@ -29,6 +29,7 @@ import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
 import { exportZip } from '../app/export-zip.js';
 import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
+import { createTheme, cycleUi, cyclePdfPreview, applyTheme, loadTheme, saveTheme, isInverted } from '../ui/theme.js';
 import { toast } from '../ui/toast.js';
 
 const TOOL_ICONS = { select: '↖', rect: '▭', poly: '⬠' };
@@ -103,6 +104,19 @@ export function boot(opts = {}) {
   })();
   let currentKey = null;
   let saveTimer = null;
+
+  // ---- 配色：界面与 PDF 两套独立三态 ----
+  const theme = loadTheme(storage);
+  const prefersDark = () =>
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false;
+
+  function applyColors() {
+    applyTheme(theme, document, prefersDark());
+    saveTheme(storage, theme);
+    return theme;
+  }
 
   function persist(force) {
     if (!storage || !currentKey) return false;
@@ -235,6 +249,16 @@ export function boot(opts = {}) {
 
   addButton(shell, 'left', '↶', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销' });
   addButton(shell, 'left', '↷', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做' });
+  addButton(shell, 'right', '◐', () => {
+    cycleUi(theme);
+    applyColors();
+  }, { title: '界面配色：跟随系统 → 浅色 → 深色', ariaLabel: '界面配色' });
+
+  addButton(shell, 'right', '◑', () => {
+    cyclePdfPreview(theme);
+    applyColors();
+  }, { title: 'PDF 预览：跟随界面 → 正常 → 反相 (Ctrl+I)', ariaLabel: 'PDF 配色' });
+
   addButton(shell, 'right', '导出', () => doExport(), { title: '导出 ZIP (Ctrl+E)', ariaLabel: '导出' });
 
   // 浮动工具组：画布左上
@@ -386,6 +410,10 @@ export function boot(opts = {}) {
       const v = nudgeVector(ev);
       if (nudge(ed, v.dx, v.dy)) { record('nudge'); render(); }
     },
+    'view.invert': () => {
+      theme.pdf = isInverted(theme, prefersDark()) ? 'normal' : 'invert';
+      applyColors();
+    },
     cancel: () => {
       ed.draft = null;
       ed.selectedId = null;
@@ -466,6 +494,7 @@ export function boot(opts = {}) {
     }
   };
 
+  applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => stack.applyZoom());
 

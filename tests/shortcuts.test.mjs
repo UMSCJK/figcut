@@ -19,6 +19,7 @@ test('shortcuts: Ctrl 组合', () => {
   assert(resolveKey(ev('e', { ctrlKey: true })) === 'export.zip');
   assert(resolveKey(ev('0', { ctrlKey: true })) === 'zoom.reset');
   assert(resolveKey(ev('End', { ctrlKey: true })) === 'page.last');
+  assert(resolveKey(ev('i', { ctrlKey: true })) === 'view.invert');
 });
 
 test('shortcuts: 焦点在输入框时只有 Esc 放行', () => {

@@ -41,6 +41,7 @@ export function resolveKey(ev) {
     if (lower === 'e') return 'export.zip';
     if (lower === 's') return 'config.save';
     if (lower === 'o') return 'file.open';
+    if (lower === 'i') return 'view.invert';
     if (key === '0') return 'zoom.reset';
     if (key === 'Home') return 'page.first';
     if (key === 'End') return 'page.last';
