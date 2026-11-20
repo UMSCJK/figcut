@@ -43,7 +43,7 @@ export function createPageStack(opts) {
     renderTimer = setTimeout(() => {
       renderTimer = null;
       busy = busy.then(applyZoom);
-    }, 140);
+    }, 220);
   }
 
   async function applyZoom() {
@@ -58,10 +58,13 @@ export function createPageStack(opts) {
       return r.bottom > host.top - 800 && r.top < host.bottom + 800;
     };
 
-    for (const p of pages) {
+    // 先画当前页，其余页随后，避免切页后等所有页一起渲染
+    const ordered = pages.slice().sort((a, b) => (b.no === current ? 1 : 0) - (a.no === current ? 1 : 0));
+
+    for (const p of ordered) {
       if (my !== token) return;
-      // 只重绘视口附近的页；离得远的等滚回来再画，缩放才不会卡
-      if (!near(p) && p.renderedScale === scale) continue;
+      // 只画视口附近的页；远处的先留着旧位图，等滚回来再补（滚动手势里会再触发）
+      if (!near(p) && p.renderedScale) continue;
       const vp = p.page.getViewport({ scale });
       p.wrap.style.transform = '';
       p.renderedScale = scale;

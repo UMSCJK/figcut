@@ -130,10 +130,10 @@ export function renderZoomControl(opts) {
         btn.textContent = pct(v);
         btn.classList.toggle('on', !z.auto && z.mode === 'free' && Math.abs(z.scale - v) < 1e-6);
       } else if (action === 'fit-page') {
-        btn.textContent = '整页' + (fits.page ? ' ' + pct(fits.page) : '');
+        btn.textContent = '整页';
         btn.classList.toggle('on', z.mode === 'fit-page');
       } else {
-        btn.textContent = '页宽' + (fits.width ? ' ' + pct(fits.width) : '');
+        btn.textContent = '页宽';
         btn.classList.toggle('on', z.mode === 'fit-width');
       }
     }

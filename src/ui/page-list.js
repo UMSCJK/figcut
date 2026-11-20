@@ -11,9 +11,9 @@ export function renderPageList(host, opts) {
   const doc = host.ownerDocument;
   const { pages, current, regions, onPick, thumbFor } = opts;
   const counts = countByPage(regions || []);
-  const head = host.querySelector('.side-head');
-  host.textContent = '';
-  if (head) host.appendChild(head);
+  // 只替换列表本身，别把表头和折叠按钮一起清掉
+  const old = host.querySelector('.page-list');
+  if (old) old.remove();
 
   const list = doc.createElement('div');
   list.className = 'page-list';

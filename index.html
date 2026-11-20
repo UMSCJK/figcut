@@ -15,16 +15,22 @@
     <div class="cluster cluster-right" id="topbar-right"></div>
   </header>
   <main class="body" id="body">
-    <aside class="sidebar" id="panel-left"><div class="side-head" id="side-head">页面</div></aside>
+    <aside class="sidebar" id="panel-left">
+      <div class="side-head" id="side-head">页面</div>
+      <button type="button" class="side-toggle" id="toggle-left" title="收起/展开左栏">‹</button>
+    </aside>
     <div class="splitter" id="split-left" title="拖动调整宽度，双击折叠"></div>
     <div class="canvas" id="canvas">
       <div class="empty" id="empty">
         <div class="big">把 PDF 拖进来</div>
         <div class="small">或点左上角「打开」</div>
+        <div class="recent" id="recent"></div>
       </div>
     </div>
     <div class="splitter" id="split-right" title="拖动调整宽度，双击折叠"></div>
-    <aside class="panel" id="panel-right"></aside>
+    <aside class="panel" id="panel-right">
+      <button type="button" class="side-toggle is-right" id="toggle-right" title="收起/展开右栏">›</button>
+    </aside>
   </main>
   <div class="banner" id="banner" hidden></div>
 </div>

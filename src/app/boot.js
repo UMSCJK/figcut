@@ -392,7 +392,7 @@ export function boot(opts = {}) {
   addButton(shell, 'left', '打开', async () => {
     const file = await pickFile();
     if (file) load(file);
-  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn', icon: ICONS.doc });
+  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn' });
 
   const undoUi = () => {
     const prev = undo(hist);
@@ -438,7 +438,9 @@ export function boot(opts = {}) {
   marginLabel.textContent = '边距 (pt)';
   marginLabel.appendChild(marginInput);
   settingsBox.append(dpiLabel, marginLabel);
-  document.body.appendChild(settingsBox);
+  settingsBox.className = 'settings-inline';
+  settingsBox.hidden = true;
+  shell.right.insertBefore(settingsBox, shell.right.firstChild);
 
   dpiInput.addEventListener('change', () => {
     dpiInput.value = String(setDpi(settings, dpiInput.value));
@@ -688,21 +690,36 @@ export function boot(opts = {}) {
 
   bindShortcuts(document, actions);
 
-  // Ctrl+滚轮：以指针为锚点缩放
+  // Ctrl+滚轮：以指针为锚点缩放。事件按帧合并，trackpad 再密也只算一次。
+  let wheelAcc = 0;
+  let wheelPoint = null;
+  let wheelRaf = 0;
+
+  function applyWheel() {
+    wheelRaf = 0;
+    if (!wheelPoint || wheelAcc === 0 || state !== 'ready') return;
+    const root = stack.root;
+    const from = zoom.scale;
+    const factor = Math.pow(1.0015, -wheelAcc);
+    wheelAcc = 0;
+    const to = Math.min(zoom.max, Math.max(zoom.min, from * factor));
+    if (Math.abs(to - from) < 1e-6) return;
+    setScale(zoom, to);
+    stack.setVisualScale(zoom.scale);
+    stack.scheduleZoom();
+    const next = anchorAt({ x: root.scrollLeft, y: root.scrollTop }, wheelPoint.x, wheelPoint.y, from, zoom.scale);
+    root.scrollLeft = next.x;
+    root.scrollTop = next.y;
+  }
+
   shell.canvas.addEventListener('wheel', (ev) => {
     if (!(ev.ctrlKey || ev.metaKey) || state !== 'ready') return;
     ev.preventDefault();
     const root = stack.root;
     const box = root.getBoundingClientRect();
-    const px = ev.clientX - box.left;
-    const py = ev.clientY - box.top;
-    const from = zoom.scale;
-    setScale(zoom, from * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
-    stack.setVisualScale(zoom.scale);
-    stack.scheduleZoom();
-    const next = anchorAt({ x: root.scrollLeft, y: root.scrollTop }, px, py, from, zoom.scale);
-    root.scrollLeft = next.x;
-    root.scrollTop = next.y;
+    wheelPoint = { x: ev.clientX - box.left, y: ev.clientY - box.top };
+    wheelAcc += ev.deltaY;
+    if (!wheelRaf) wheelRaf = requestAnimationFrame(applyWheel);
   }, { passive: false });
 
   // 滚动时当前页跟着走（右栏预览与列表要跟着变）
@@ -763,6 +780,7 @@ export function boot(opts = {}) {
       render();
       pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
+      pushRecent({ name: file.name, size: file.size, pages: n, ts: Date.now() });
       state = 'ready';
     } catch (e) {
       state = 'error';
@@ -783,6 +801,66 @@ export function boot(opts = {}) {
     stack.scheduleZoom();
   });
 
+  // ---- 最近打开（启动时在中间列出来） ----
+  const RECENT_KEY = 'figcut.recent';
+
+  function readRecent() {
+    try {
+      const raw = storage && storage.getItem(RECENT_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function pushRecent(entry) {
+    const list = readRecent().filter((x) => !(x.name === entry.name && x.size === entry.size));
+    list.unshift(entry);
+    try {
+      storage && storage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 8)));
+    } catch (e) {
+      /* 存不下无所谓 */
+    }
+    renderRecent();
+  }
+
+  function renderRecent() {
+    const host = document.getElementById('recent');
+    if (!host) return;
+    const list = readRecent();
+    host.textContent = '';
+    if (list.length === 0) return;
+
+    const head = doc.createElement('div');
+    head.className = 'recent-head';
+    head.textContent = '最近打开';
+    host.appendChild(head);
+
+    for (const item of list) {
+      const btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'recent-item';
+
+      const name = doc.createElement('span');
+      name.className = 'name';
+      name.textContent = item.name;
+
+      const meta = doc.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = (item.pages || '?') + ' 页';
+
+      btn.append(name, meta);
+      btn.addEventListener('click', async () => {
+        const file = await pickFile();
+        if (file) load(file);
+      });
+      host.appendChild(btn);
+    }
+  }
+
+  renderRecent();
+
   // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
   const LAYOUT_KEY = 'figcut.layout';
   const layout = (() => {
@@ -800,10 +878,12 @@ export function boot(opts = {}) {
     }
   };
 
+  const COLLAPSED_W = 31;
+
   function applyLayout() {
     const root = document.documentElement;
-    if (layout.side) root.style.setProperty('--w-side', layout.side + 'px');
-    if (layout.panel) root.style.setProperty('--w-panel', layout.panel + 'px');
+    root.style.setProperty('--w-side', (layout.leftCollapsed ? COLLAPSED_W : layout.side || 210) + 'px');
+    root.style.setProperty('--w-panel', (layout.rightCollapsed ? COLLAPSED_W : layout.panel || 250) + 'px');
     shell.panelLeft.classList.toggle('is-collapsed', !!layout.leftCollapsed);
     shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
   }
@@ -851,6 +931,28 @@ export function boot(opts = {}) {
 
   bindSplitter(document.getElementById('split-left'), 'left');
   bindSplitter(document.getElementById('split-right'), 'right');
+
+  const leftToggle = document.getElementById('toggle-left');
+  if (leftToggle) {
+    leftToggle.textContent = '‹';
+    leftToggle.addEventListener('click', () => {
+      layout.leftCollapsed = !layout.leftCollapsed;
+      applyLayout();
+      saveLayout();
+      leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
+    });
+  }
+
+  const rightToggle = document.getElementById('toggle-right');
+  if (rightToggle) {
+    rightToggle.textContent = '›';
+    rightToggle.addEventListener('click', () => {
+      layout.rightCollapsed = !layout.rightCollapsed;
+      applyLayout();
+      saveLayout();
+      rightToggle.textContent = layout.rightCollapsed ? '‹' : '›';
+    });
+  }
 
   // 未捕获异常进底部横幅，不覆盖空状态，10 秒后自己消失
   if (typeof window !== 'undefined') {
