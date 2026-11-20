@@ -1,5 +1,5 @@
 import { test, assert } from '../tools/testkit.mjs';
-import { keyForFile, loadConfig, saveConfig, migrate, STORAGE_KEY, SCHEMA } from '../src/io/config.js';
+import { keyForFile, loadConfig, saveConfig, migrate, flattenPages, groupByPage, STORAGE_KEY, SCHEMA } from '../src/io/config.js';
 
 function memoryStorage(seed) {
   const map = new Map(Object.entries(seed || {}));
@@ -52,6 +52,17 @@ test('config: 裸数组也能迁', () => {
 test('config: v4 原样通过', () => {
   const v4 = { version: 4, app: 'figcut', files: { k: { pages: {} } } };
   assert(migrate(v4) === v4);
+});
+
+test('config: 页分组与还原互为逆运算，id 续上', () => {
+  const regions = [
+    { id: 3, page: 1, kind: 'stem' },
+    { id: 7, page: 2, kind: 'opt', opt: 'B' },
+  ];
+  const back = flattenPages(groupByPage(regions));
+  assert(back.regions.length === 2);
+  assert(back.regions[0].page === 1 && back.regions[1].page === 2);
+  assert(back.nextId === 8, 'nextId 应接最大值，实际 ' + back.nextId);
 });
 
 test('config: 坏 JSON 抛 FigcutError', () => {

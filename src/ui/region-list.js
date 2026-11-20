@@ -3,7 +3,8 @@
 
 import { buildControls, kindValue } from './inspector.js';
 
-export function groupByPage(regions) {
+// 按页分组给列表用；真正的分组逻辑在 io/config（存盘也要用同一份）
+export function groupRowsByPage(regions) {
   const map = new Map();
   for (const r of regions) {
     if (!map.has(r.page)) map.set(r.page, []);
@@ -23,7 +24,7 @@ export function renderRegions(host, opts) {
   const { regions, page, selectedId, onSelect, onChange, onDelete } = opts;
   host.textContent = '';
 
-  const groups = groupByPage(regions);
+  const groups = groupRowsByPage(regions);
   if (groups.length === 0) {
     const empty = doc.createElement('div');
     empty.className = 'region-empty';

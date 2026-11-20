@@ -11,7 +11,7 @@ export function keyForFile(fileName, bytes) {
   return configKey(fileName, bytes);
 }
 
-function groupByPage(regions) {
+export function groupByPage(regions) {
   const pages = {};
   for (const r of regions) {
     const p = r.page || 1;
@@ -19,6 +19,20 @@ function groupByPage(regions) {
     pages[p].push(r);
   }
   return pages;
+}
+
+// 从 pages 分组还原成扁平 regions，并补齐 id（重开时不能和内存里的 id 撞）
+export function flattenPages(pages) {
+  const out = [];
+  let maxId = 0;
+  for (const page of Object.keys(pages || {})) {
+    for (const r of pages[page] || []) {
+      const id = Number(r.id) || 0;
+      if (id > maxId) maxId = id;
+      out.push({ ...r, page: Number(page) });
+    }
+  }
+  return { regions: out, nextId: maxId + 1 };
 }
 
 // 把 1/2/3 版配置抬到 schema4：{version, app, files:{key:{pages}}}

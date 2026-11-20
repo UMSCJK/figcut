@@ -24,6 +24,7 @@ import {
 import { createHistory, commit, undo, redo } from '../core/history.js';
 import { openFile, acceptDrop, pickFile } from '../app/open.js';
 import { exportZip } from '../app/export-zip.js';
+import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
 import { toast } from '../ui/toast.js';
 
 const TOOL_ICONS = { select: '↖', rect: '▭', poly: '⬠' };
@@ -83,7 +84,45 @@ export function boot(opts = {}) {
   }
 
   const snapshot = () => JSON.stringify(ed.regions);
-  const record = (key) => commit(hist, snapshot(), key ? { key } : {});
+  const record = (key) => {
+    commit(hist, snapshot(), key ? { key } : {});
+    scheduleSave();
+  };
+
+  // ---- 持久化：每份 PDF 一条 localStorage 记录，键 = 文件名|字节数 ----
+  const storage = (() => {
+    try {
+      return typeof window !== 'undefined' ? window.localStorage : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+  let currentKey = null;
+  let saveTimer = null;
+
+  function persist(force) {
+    if (!storage || !currentKey) return false;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+      saveConfig(storage, currentKey, {
+        source: currentName,
+        export: { dpi: 300, margin: 8 },
+        updatedAt: Date.now(),
+        pages: groupByPage(ed.regions),
+      });
+      return true;
+    } catch (e) {
+      toast('存不下标注（localStorage 满了？），请尽快导出 ZIP');
+      return false;
+    }
+  }
+
+  function scheduleSave() {
+    if (!storage || !currentKey) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => persist(true), 200);
+  }
 
   // 右栏：常驻预览 + 区域列表
   const doc = shell.canvas.ownerDocument;
@@ -271,6 +310,11 @@ export function boot(opts = {}) {
       }
       return;
     }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+      ev.preventDefault();
+      persist(true);
+      return;
+    }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') {
       ev.preventDefault();
       doExport();
@@ -307,6 +351,7 @@ export function boot(opts = {}) {
   });
 
   const load = async (file) => {
+    persist(true); // 打开新文件前先落上一份
     state = 'loading';
     setEmpty(shell, false);
     setTitle(shell, file.name);
@@ -325,6 +370,19 @@ export function boot(opts = {}) {
       ed.pageW = stack.pages.length > 0 ? overlays.get(1).size.w : 595;
       ed.pageH = stack.pages.length > 0 ? overlays.get(1).size.h : 842;
 
+      // 恢复这份 PDF 之前的标注
+      currentKey = keyForFile(file.name, file.size);
+      const saved = storage ? loadConfig(storage, currentKey) : null;
+      if (saved && saved.pages) {
+        const back = flattenPages(saved.pages);
+        ed.regions = back.regions;
+        ed.nextId = back.nextId;
+        ed.selectedId = null;
+        hist.past.length = 0;
+        hist.future.length = 0;
+        hist.present = snapshot();
+      }
+
       render();
       setTitle(shell, file.name + ' · ' + n + ' 页');
       state = 'ready';
@@ -338,6 +396,14 @@ export function boot(opts = {}) {
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => stack.applyZoom());
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => persist(true));
+    window.addEventListener('beforeunload', () => persist(true));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persist(true);
+    });
+  }
+
   if (opts.url) {
     const name = String(opts.url).split('/').pop() || 'document.pdf';
     fetch(opts.url)
@@ -346,7 +412,19 @@ export function boot(opts = {}) {
       .catch((e) => toast('打不开 ' + opts.url + '：' + e.message));
   }
 
-  return { shell, zoom, stack, editor: ed, history: hist, load, render, exportZip: doExport, status: () => state };
+  return {
+    shell,
+    zoom,
+    stack,
+    editor: ed,
+    history: hist,
+    load,
+    render,
+    exportZip: doExport,
+    persist: () => persist(true),
+    debug: () => ({ key: currentKey, hasStorage: !!storage, regions: ed.regions.length, state }),
+    status: () => state,
+  };
 }
 
 // 骨架里声明的名字：读装配后的状态
