@@ -664,18 +664,23 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .region-label { font-size: 11.5px; color: var(--text-2); }
 
 .region-del {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
   color: var(--destructive);
 }
 
-.region-del:hover { background: var(--hover); }
+.region-del svg { width: 17px; height: 17px; }
+
+.region-del:hover {
+  background: var(--destructive);
+  color: #fff;
+}
 
 /* ---------- 弹出设置 ---------- */
 
@@ -856,6 +861,42 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .lightbox-bar { display: flex; align-items: center; gap: 10px; color: #fff; }
 .lightbox-bar .icon-btn { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; }
 .lightbox-no { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+
+/* 配色连体按钮组 */
+.seg {
+  display: inline-flex;
+  height: var(--h-btn);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--card);
+}
+
+.seg-btn {
+  width: 30px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover { background: var(--hover); color: var(--text); }
+.seg-btn.on { background: var(--sel); color: var(--accent); }
+
+/* 右栏一行里的控件：类型按钮独占一行，题号/备注并列 */
+.inspector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-width: 0;
+}
+
+.inspector .opt-btn { grid-column: 1 / -1; width: 100%; }
+.inspector .region-q, .inspector .region-note { width: 100%; min-width: 0; height: 22px; }
 
 </style>
 </head>
@@ -1486,6 +1527,191 @@ function renderZoomControl(opts) {
 
 function bindZoomInput(control) {
   return control;
+}
+
+// ---- src/ui/inspector.js ----
+// 类型选择器：题干 + A–K 多选 + 自定义文本（同一个 figure 可以同时是 A 和 C）
+// 状态：已实现。
+
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+
+function optsOf(region) {
+  if (Array.isArray(region.opts)) return region.opts.slice();
+  if (region.kind === 'opt' && region.opt) {
+    return region.opt === 'custom' ? (region.optText ? [region.optText] : []) : [region.opt];
+  }
+  return [];
+}
+
+function writeOpts(region, list) {
+  region.opts = list;
+  region.kind = list.length ? 'opt' : 'stem';
+  // 兼容旧字段
+  region.opt = list.length === 1 && LETTERS.includes(list[0]) ? list[0] : list.length ? 'custom' : null;
+  region.optText = list.length ? list.filter((x) => !LETTERS.includes(x)).join(' ') : '';
+  return region;
+}
+
+function setKind(region, kind) {
+  if (kind === 'stem') writeOpts(region, []);
+  else if (kind === 'custom') writeOpts(region, region.optText ? [region.optText] : []);
+  else if (LETTERS.includes(kind)) writeOpts(region, [kind]);
+  return region;
+}
+
+function toggleLetter(region, letter) {
+  const list = optsOf(region);
+  const i = list.indexOf(letter);
+  if (i >= 0) list.splice(i, 1);
+  else list.push(letter);
+  return writeOpts(region, list);
+}
+
+function setCustomOption(region, text) {
+  const clean = String(text || '').trim();
+  const letters = optsOf(region).filter((x) => LETTERS.includes(x));
+  return writeOpts(region, clean ? [...letters, clean] : letters);
+}
+
+function setQuestion(region, q) {
+  region.q = String(q === undefined || q === null ? '' : q).trim();
+  return region;
+}
+
+function setNote(region, note) {
+  region.note = String(note || '');
+  return region;
+}
+
+function labelOfKind(region) {
+  const list = optsOf(region);
+  if (!list.length) return '题干';
+  return list.join(' ');
+}
+
+function kindValue(region) {
+  const list = optsOf(region);
+  if (!list.length) return 'stem';
+  if (list.length === 1 && LETTERS.includes(list[0])) return list[0];
+  return 'custom';
+}
+
+function buildControls(doc, region, onChange, opts = {}) {
+  const row = doc.createElement('div');
+  row.className = 'inspector';
+
+  const kindBtn = doc.createElement('button');
+  kindBtn.type = 'button';
+  kindBtn.className = 'opt-btn';
+  kindBtn.title = '类型：题干 / A–K 可多选 / 自定义';
+
+  const menu = doc.createElement('div');
+  menu.className = 'opt-menu';
+  menu.hidden = true;
+
+  const stemBtn = doc.createElement('button');
+  stemBtn.type = 'button';
+  stemBtn.className = 'opt-cell is-wide';
+  stemBtn.textContent = '题干';
+  stemBtn.dataset.kind = 'stem';
+  menu.appendChild(stemBtn);
+
+  for (const letter of LETTERS) {
+    const b = doc.createElement('button');
+    b.type = 'button';
+    b.className = 'opt-cell';
+    b.textContent = letter;
+    b.dataset.kind = letter;
+    menu.appendChild(b);
+  }
+
+  const custom = doc.createElement('input');
+  custom.className = 'opt-cell opt-input';
+  custom.type = 'text';
+  custom.placeholder = '其他';
+  custom.value = optsOf(region).filter((x) => !LETTERS.includes(x)).join(' ');
+  custom.title = '自定义选项名';
+  menu.appendChild(custom);
+
+  const cells = [...menu.querySelectorAll('.opt-cell[data-kind]')];
+
+  function sync() {
+    kindBtn.textContent = labelOfKind(region) + ' ▾';
+    const list = optsOf(region);
+    for (const c of cells) {
+      if (c.dataset.kind === 'stem') c.classList.toggle('on', list.length === 0);
+      else c.classList.toggle('on', list.includes(c.dataset.kind));
+    }
+    custom.classList.toggle('on', list.some((x) => !LETTERS.includes(x)));
+  }
+  sync();
+
+  function close() {
+    menu.hidden = true;
+    doc.removeEventListener('pointerdown', onOutside, true);
+  }
+  function onOutside(ev) {
+    if (menu.contains(ev.target) || kindBtn.contains(ev.target)) return;
+    close();
+  }
+  function open() {
+    const r = kindBtn.getBoundingClientRect();
+    menu.style.left = Math.round(r.left) + 'px';
+    menu.style.top = Math.round(r.bottom + 4) + 'px';
+    menu.hidden = false;
+    doc.addEventListener('pointerdown', onOutside, true);
+    opts.onOpen && opts.onOpen();
+  }
+  kindBtn.addEventListener('click', () => (menu.hidden ? open() : close()));
+
+  for (const c of cells) {
+    c.addEventListener('click', () => {
+      if (c.dataset.kind === 'stem') setKind(region, 'stem');
+      else toggleLetter(region, c.dataset.kind);
+      sync();
+      onChange(region, { structural: true });
+    });
+  }
+  custom.addEventListener('input', () => {
+    setCustomOption(region, custom.value);
+    sync();
+    onChange(region, { quiet: true });
+  });
+
+  const q = doc.createElement('input');
+  q.className = 'region-q';
+  q.type = 'text';
+  q.placeholder = '题号';
+  q.value = region.q || '';
+  q.title = '题号';
+
+  const note = doc.createElement('input');
+  note.className = 'region-note';
+  note.type = 'text';
+  note.placeholder = '备注';
+  note.value = region.note || '';
+  note.title = '备注';
+
+  q.addEventListener('input', () => {
+    setQuestion(region, q.value);
+    onChange(region, { quiet: true });
+  });
+  note.addEventListener('input', () => {
+    setNote(region, note.value);
+    onChange(region, { quiet: true });
+  });
+
+  row.append(kindBtn, q, note);
+  doc.body.appendChild(menu);
+  row._menu = menu;
+  return row;
+}
+
+function renderInspector(container, region, onChange) {
+  const row = buildControls(container.ownerDocument, region, onChange);
+  container.textContent = '';
+  container.appendChild(row);
+  return row;
 }
 
 // ---- src/pdf/bitmap.js ----
@@ -2391,171 +2617,6 @@ function drawCrop(preview, opts) {
   return renderPreview(preview, opts);
 }
 
-// ---- src/ui/inspector.js ----
-// 类型选择器：自己画的九宫格（题干 / A–K / 自定义输入），不用原生 select
-// 状态：已实现。
-
-const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
-
-function setKind(region, kind) {
-  if (kind === 'stem') {
-    region.kind = 'stem';
-    region.opt = null;
-  } else if (kind === 'custom') {
-    region.kind = 'opt';
-    region.opt = 'custom';
-  } else if (LETTERS.includes(kind)) {
-    region.kind = 'opt';
-    region.opt = kind;
-  }
-  return region;
-}
-
-function setCustomOption(region, text) {
-  region.kind = 'opt'; // 自定义也是"选项"，不是题干
-  region.opt = 'custom';
-  region.optText = String(text || '').trim();
-  return region;
-}
-
-function setQuestion(region, q) {
-  region.q = String(q === undefined || q === null ? '' : q).trim();
-  return region;
-}
-
-function setNote(region, note) {
-  region.note = String(note || '');
-  return region;
-}
-
-function kindValue(region) {
-  if (region.kind !== 'opt') return 'stem';
-  return region.opt === 'custom' ? 'custom' : region.opt || 'A';
-}
-
-function labelOfKind(region) {
-  const v = kindValue(region);
-  if (v === 'stem') return '题干';
-  if (v === 'custom') return region.optText ? region.optText : '自定义';
-  return v;
-}
-
-function buildControls(doc, region, onChange, opts = {}) {
-  const row = doc.createElement('div');
-  row.className = 'inspector';
-
-  // ---- 类型按钮 + 九宫格弹层 ----
-  const kindBtn = doc.createElement('button');
-  kindBtn.type = 'button';
-  kindBtn.className = 'opt-btn';
-  kindBtn.title = '类型：题干 / A–K / 自定义';
-
-  const menu = doc.createElement('div');
-  menu.className = 'opt-menu';
-  menu.hidden = true;
-
-  const stemBtn = doc.createElement('button');
-  stemBtn.type = 'button';
-  stemBtn.className = 'opt-cell is-wide';
-  stemBtn.textContent = '题干';
-  stemBtn.dataset.kind = 'stem';
-  menu.appendChild(stemBtn);
-
-  for (const letter of LETTERS) {
-    const b = doc.createElement('button');
-    b.type = 'button';
-    b.className = 'opt-cell';
-    b.textContent = letter;
-    b.dataset.kind = letter;
-    menu.appendChild(b);
-  }
-
-  const custom = doc.createElement('input');
-  custom.className = 'opt-cell opt-input';
-  custom.type = 'text';
-  custom.placeholder = '其他';
-  custom.value = region.optText || '';
-  custom.title = '自定义选项名';
-  menu.appendChild(custom);
-
-  const cells = [...menu.querySelectorAll('.opt-cell[data-kind]')];
-
-  function sync() {
-    kindBtn.textContent = labelOfKind(region) + ' ▾';
-    for (const c of cells) c.classList.toggle('on', c.dataset.kind === kindValue(region));
-    custom.classList.toggle('on', kindValue(region) === 'custom');
-  }
-  sync();
-
-  function close() {
-    menu.hidden = true;
-    doc.removeEventListener('pointerdown', onOutside, true);
-  }
-  function onOutside(ev) {
-    if (menu.contains(ev.target) || kindBtn.contains(ev.target)) return;
-    close();
-  }
-  function open() {
-    const r = kindBtn.getBoundingClientRect();
-    menu.style.left = Math.round(r.left) + 'px';
-    menu.style.top = Math.round(r.bottom + 4) + 'px';
-    menu.hidden = false;
-    doc.addEventListener('pointerdown', onOutside, true);
-    opts.onOpen && opts.onOpen();
-  }
-  kindBtn.addEventListener('click', () => (menu.hidden ? open() : close()));
-
-  for (const c of cells) {
-    c.addEventListener('click', () => {
-      setKind(region, c.dataset.kind);
-      sync();
-      close();
-      onChange(region, { structural: true });
-    });
-  }
-  custom.addEventListener('input', () => {
-    setCustomOption(region, custom.value);
-    sync();
-    onChange(region, { quiet: true });
-  });
-
-  // ---- 题号 / 备注 ----
-  const q = doc.createElement('input');
-  q.className = 'region-q';
-  q.type = 'text';
-  q.placeholder = '题号';
-  q.value = region.q || '';
-  q.title = '题号';
-
-  const note = doc.createElement('input');
-  note.className = 'region-note';
-  note.type = 'text';
-  note.placeholder = '备注';
-  note.value = region.note || '';
-  note.title = '备注';
-
-  q.addEventListener('input', () => {
-    setQuestion(region, q.value);
-    onChange(region, { quiet: true });
-  });
-  note.addEventListener('input', () => {
-    setNote(region, note.value);
-    onChange(region, { quiet: true });
-  });
-
-  row.append(kindBtn, q, note);
-  doc.body.appendChild(menu);
-  row._menu = menu;
-  return row;
-}
-
-function renderInspector(container, region, onChange) {
-  const row = buildControls(container.ownerDocument, region, onChange);
-  container.textContent = '';
-  container.appendChild(row);
-  return row;
-}
-
 // ---- src/ui/region-list.js ----
 // 右栏区域列表：本页可编辑，其他页只读分组
 // 状态：已实现。
@@ -2581,7 +2642,7 @@ function labelOf(region) {
 
 function renderRegions(host, opts) {
   const doc = host.ownerDocument;
-  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb } = opts;
+  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb, onThumbClick } = opts;
   // 清掉上一轮挂在 body 上的类型弹层
   for (const old of doc.querySelectorAll('.opt-menu')) old.remove();
   host.textContent = '';
@@ -2609,6 +2670,10 @@ function renderRegions(host, opts) {
       row.addEventListener('click', (ev) => {
         // 点控件（类型按钮/输入框）时不算"选中这一行"，否则列表重建会把弹层关掉
         if (ev.target && ev.target.closest && ev.target.closest('.inspector')) return;
+        if (ev.target && ev.target.closest && ev.target.closest('.region-thumb')) {
+          onThumbClick && onThumbClick(r);
+          return;
+        }
         onSelect(r);
       });
 
@@ -3575,14 +3640,20 @@ function optName(which) {
   return 'opt' + OPT_LETTERS[idx];
 }
 
-// 角色：stem / optA..optK / opt<自定义名>
+// 角色：stem / optA-optC / opt<自定义名>
 function roleOf(region) {
-  if (region.kind !== 'opt') return 'stem';
-  if (region.opt === 'custom') {
-    const name = sanitize(region.optText, 12);
-    return 'opt' + (name || 'X');
-  }
-  return optName(region.opt === undefined || region.opt === null ? 0 : region.opt);
+  const list = Array.isArray(region.opts)
+    ? region.opts
+    : region.kind === 'opt' && region.opt
+      ? [region.opt === 'custom' ? (region.optText || 'X') : region.opt]
+      : [];
+  if (list.length === 0) return 'stem';
+  const names = list.map((item) => {
+    const letter = String(item).toUpperCase();
+    if (OPT_LETTERS.includes(letter) && String(item).length === 1) return 'opt' + letter;
+    return 'opt' + (sanitize(item, 12) || 'X');
+  });
+  return names.join('-');
 }
 
 // p09-q28-stem.png / p09-q29-optB-note.png
@@ -4250,6 +4321,7 @@ function banner(message, opts = {}) {
 
 
 
+
 function boot(opts = {}) {
   const shell = createShell();
   const zoom = createZoom({ scale: 1 });
@@ -4565,10 +4637,7 @@ function boot(opts = {}) {
         pages: stack.pages,
         current: ed.page,
         regions: ed.regions,
-        onPick: (no) => {
-          goPage(no);
-          openLightbox(no);
-        },
+        onPick: (no) => goPage(no),
         thumbFor,
         cols: effectiveCols(),
       });
@@ -4586,6 +4655,7 @@ function boot(opts = {}) {
         refresh();
       },
       onThumb: regionThumb,
+      onThumbClick: (region) => openFigureLightbox(region),
       onDelete: (region) => {
         const idx = ed.regions.indexOf(region);
         if (idx >= 0) ed.regions.splice(idx, 1);
@@ -4702,23 +4772,39 @@ function boot(opts = {}) {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
 
-  const themeBtn = addButton(shell, 'right', '配色', () => {
-    cycleUi(theme);
-    applyColors();
-  }, { title: '界面配色', ariaLabel: '界面配色', icon: ICONS.uiAuto });
+  // 配色：三个连体按钮（浅UI浅PDF / 深UI浅PDF / 深UI深PDF）
+  const APPEARANCES = [
+    { ui: 'light', pdf: 'normal', icon: ICONS.uiLight, title: '浅色界面 + 浅色 PDF' },
+    { ui: 'dark', pdf: 'normal', icon: ICONS.uiAuto, title: '深色界面 + 浅色 PDF' },
+    { ui: 'dark', pdf: 'invert', icon: ICONS.uiDark, title: '深色界面 + 深色 PDF' },
+  ];
 
-  const invertBtn = addButton(shell, 'right', '反相', () => {
-    cyclePdfPreview(theme);
-    applyColors();
-  }, { title: 'PDF 预览', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+  const appearanceGroup = doc.createElement('div');
+  appearanceGroup.className = 'seg';
+  const appearanceBtns = APPEARANCES.map((item) => {
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'seg-btn';
+    btn.innerHTML = item.icon;
+    btn.title = item.title;
+    btn.setAttribute('aria-label', item.title);
+    btn.addEventListener('click', () => {
+      theme.ui = item.ui;
+      theme.pdf = item.pdf;
+      applyColors();
+    });
+    appearanceGroup.appendChild(btn);
+    return { btn, item };
+  });
+  shell.right.insertBefore(appearanceGroup, settingsBox);
 
   function syncColorButtons() {
-    const ui = theme.ui;
-    themeBtn.innerHTML = ui === 'light' ? ICONS.uiLight : ui === 'dark' ? ICONS.uiDark : ICONS.uiAuto;
-    themeBtn.title = '界面配色：' + (ui === 'auto' ? '跟随系统' : ui === 'light' ? '浅色' : '深色') + '（点一下切换）';
+    const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
-    invertBtn.classList.toggle('on', inv);
-    invertBtn.title = 'PDF 预览：' + (theme.pdf === 'auto' ? '跟随界面' : theme.pdf === 'normal' ? '正常' : '反相') + '（Ctrl+I）';
+    for (const { btn, item } of appearanceBtns) {
+      const on = item.ui === ui && (item.pdf === 'invert') === inv;
+      btn.classList.toggle('on', on);
+    }
   }
 
   addButton(shell, 'right', '导出', () => doExport(), {
@@ -4922,8 +5008,81 @@ function boot(opts = {}) {
     if (!lb) return;
     lbPage = no;
     lb.hidden = false;
+    const bar = document.querySelector('.lightbox-bar');
+    if (bar) {
+      bar.style.display = '';
+      const prev = document.getElementById('lb-prev');
+      const next = document.getElementById('lb-next');
+      if (prev) prev.style.display = '';
+      if (next) next.style.display = '';
+    }
     drawLightbox();
   }
+
+  // 右栏某个 figure 的全屏预览：按导出框裁好、按多边形蒙版涂白
+  async function openFigureLightbox(region) {
+    if (!lb || !region) return;
+    const p = stack.pages.find((x) => x.no === region.page);
+    const box = region.box || region.ink || (region.shape === 'poly' ? null : region.rect);
+    if (!p || !box) {
+      openLightbox(region.page);
+      return;
+    }
+    lb.hidden = false;
+    const bar = document.querySelector('.lightbox-bar');
+    if (bar) {
+      bar.style.display = '';
+      const prev = document.getElementById('lb-prev');
+      const next = document.getElementById('lb-next');
+      if (prev) prev.style.display = 'none';
+      if (next) next.style.display = 'none';
+    }
+
+    // 整页渲染到离屏画布（限制总像素），再裁出这块并放大到 ~1100px
+    const vp1 = p.page.getViewport({ scale: 1 });
+    const pageScale = Math.min(6, Math.max(1.5, 3200 / vp1.width));
+    const vp = p.page.getViewport({ scale: pageScale });
+    const off = doc.createElement('canvas');
+    off.width = Math.round(vp.width);
+    off.height = Math.round(vp.height);
+    const offCtx = off.getContext('2d');
+    offCtx.fillStyle = '#fff';
+    offCtx.fillRect(0, 0, off.width, off.height);
+    await p.page.render({ canvasContext: offCtx, viewport: vp }).promise;
+
+    const w = Math.max(1, Math.round(Math.min(1600, Math.max(320, box.w * 3))));
+    const h = Math.max(1, Math.round((box.h / box.w) * w));
+    lbCanvas.width = w;
+    lbCanvas.height = h;
+    const ctx = lbCanvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    if (region.shape === 'poly' && region.points) {
+      ctx.beginPath();
+      region.points.forEach((pt, i) => {
+        const x = ((pt.x - box.x) / box.w) * w;
+        const y = ((pt.y - box.y) / box.h) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.clip();
+    }
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(
+      off,
+      box.x * pageScale,
+      box.y * pageScale,
+      box.w * pageScale,
+      box.h * pageScale,
+      0, 0, w, h
+    );
+    ctx.restore();
+    lbNo.textContent = labelOfKind(region);
+  }
+
+
 
   function closeLightbox() {
     if (lb) lb.hidden = true;

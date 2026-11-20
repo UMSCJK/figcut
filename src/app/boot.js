@@ -8,6 +8,7 @@ import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
 import { ICONS } from '../ui/icons.js';
 import { STEPS, stepIndex } from '../ui/zoom-control.js';
+import { labelOfKind } from '../ui/inspector.js';
 import { renderZoomControl } from '../ui/zoom-control.js';
 import { createPageStack } from '../view/page-stack.js';
 import { createOverlay, drawRegions, regionsOfPage } from '../view/overlay.js';
@@ -39,7 +40,7 @@ import { openFile, acceptDrop, pickFile } from '../app/open.js';
 import { pickWithHandle, saveHandle, openRecent, cacheBytes, hasPickHandle } from '../io/filehandles.js';
 import { exportZip } from '../app/export-zip.js';
 import { keyForFile, loadConfig, saveConfig, groupByPage, flattenPages } from '../io/config.js';
-import { createTheme, cycleUi, cyclePdfPreview, applyTheme, loadTheme, saveTheme, isInverted } from '../ui/theme.js';
+import { createTheme, applyTheme, loadTheme, saveTheme, isInverted, resolvedUi } from '../ui/theme.js';
 import { loadSettings, saveSettings, setDpi, setMargin } from '../app/settings.js';
 import { toast } from '../ui/toast.js';
 
@@ -360,10 +361,7 @@ export function boot(opts = {}) {
         pages: stack.pages,
         current: ed.page,
         regions: ed.regions,
-        onPick: (no) => {
-          goPage(no);
-          openLightbox(no);
-        },
+        onPick: (no) => goPage(no),
         thumbFor,
         cols: effectiveCols(),
       });
@@ -381,6 +379,7 @@ export function boot(opts = {}) {
         refresh();
       },
       onThumb: regionThumb,
+      onThumbClick: (region) => openFigureLightbox(region),
       onDelete: (region) => {
         const idx = ed.regions.indexOf(region);
         if (idx >= 0) ed.regions.splice(idx, 1);
@@ -497,23 +496,39 @@ export function boot(opts = {}) {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
 
-  const themeBtn = addButton(shell, 'right', '配色', () => {
-    cycleUi(theme);
-    applyColors();
-  }, { title: '界面配色', ariaLabel: '界面配色', icon: ICONS.uiAuto });
+  // 配色：三个连体按钮（浅UI浅PDF / 深UI浅PDF / 深UI深PDF）
+  const APPEARANCES = [
+    { ui: 'light', pdf: 'normal', icon: ICONS.uiLight, title: '浅色界面 + 浅色 PDF' },
+    { ui: 'dark', pdf: 'normal', icon: ICONS.uiAuto, title: '深色界面 + 浅色 PDF' },
+    { ui: 'dark', pdf: 'invert', icon: ICONS.uiDark, title: '深色界面 + 深色 PDF' },
+  ];
 
-  const invertBtn = addButton(shell, 'right', '反相', () => {
-    cyclePdfPreview(theme);
-    applyColors();
-  }, { title: 'PDF 预览', ariaLabel: 'PDF 配色', icon: ICONS.invert });
+  const appearanceGroup = doc.createElement('div');
+  appearanceGroup.className = 'seg';
+  const appearanceBtns = APPEARANCES.map((item) => {
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'seg-btn';
+    btn.innerHTML = item.icon;
+    btn.title = item.title;
+    btn.setAttribute('aria-label', item.title);
+    btn.addEventListener('click', () => {
+      theme.ui = item.ui;
+      theme.pdf = item.pdf;
+      applyColors();
+    });
+    appearanceGroup.appendChild(btn);
+    return { btn, item };
+  });
+  shell.right.insertBefore(appearanceGroup, settingsBox);
 
   function syncColorButtons() {
-    const ui = theme.ui;
-    themeBtn.innerHTML = ui === 'light' ? ICONS.uiLight : ui === 'dark' ? ICONS.uiDark : ICONS.uiAuto;
-    themeBtn.title = '界面配色：' + (ui === 'auto' ? '跟随系统' : ui === 'light' ? '浅色' : '深色') + '（点一下切换）';
+    const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
-    invertBtn.classList.toggle('on', inv);
-    invertBtn.title = 'PDF 预览：' + (theme.pdf === 'auto' ? '跟随界面' : theme.pdf === 'normal' ? '正常' : '反相') + '（Ctrl+I）';
+    for (const { btn, item } of appearanceBtns) {
+      const on = item.ui === ui && (item.pdf === 'invert') === inv;
+      btn.classList.toggle('on', on);
+    }
   }
 
   addButton(shell, 'right', '导出', () => doExport(), {
@@ -717,8 +732,81 @@ export function boot(opts = {}) {
     if (!lb) return;
     lbPage = no;
     lb.hidden = false;
+    const bar = document.querySelector('.lightbox-bar');
+    if (bar) {
+      bar.style.display = '';
+      const prev = document.getElementById('lb-prev');
+      const next = document.getElementById('lb-next');
+      if (prev) prev.style.display = '';
+      if (next) next.style.display = '';
+    }
     drawLightbox();
   }
+
+  // 右栏某个 figure 的全屏预览：按导出框裁好、按多边形蒙版涂白
+  async function openFigureLightbox(region) {
+    if (!lb || !region) return;
+    const p = stack.pages.find((x) => x.no === region.page);
+    const box = region.box || region.ink || (region.shape === 'poly' ? null : region.rect);
+    if (!p || !box) {
+      openLightbox(region.page);
+      return;
+    }
+    lb.hidden = false;
+    const bar = document.querySelector('.lightbox-bar');
+    if (bar) {
+      bar.style.display = '';
+      const prev = document.getElementById('lb-prev');
+      const next = document.getElementById('lb-next');
+      if (prev) prev.style.display = 'none';
+      if (next) next.style.display = 'none';
+    }
+
+    // 整页渲染到离屏画布（限制总像素），再裁出这块并放大到 ~1100px
+    const vp1 = p.page.getViewport({ scale: 1 });
+    const pageScale = Math.min(6, Math.max(1.5, 3200 / vp1.width));
+    const vp = p.page.getViewport({ scale: pageScale });
+    const off = doc.createElement('canvas');
+    off.width = Math.round(vp.width);
+    off.height = Math.round(vp.height);
+    const offCtx = off.getContext('2d');
+    offCtx.fillStyle = '#fff';
+    offCtx.fillRect(0, 0, off.width, off.height);
+    await p.page.render({ canvasContext: offCtx, viewport: vp }).promise;
+
+    const w = Math.max(1, Math.round(Math.min(1600, Math.max(320, box.w * 3))));
+    const h = Math.max(1, Math.round((box.h / box.w) * w));
+    lbCanvas.width = w;
+    lbCanvas.height = h;
+    const ctx = lbCanvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    if (region.shape === 'poly' && region.points) {
+      ctx.beginPath();
+      region.points.forEach((pt, i) => {
+        const x = ((pt.x - box.x) / box.w) * w;
+        const y = ((pt.y - box.y) / box.h) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.clip();
+    }
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(
+      off,
+      box.x * pageScale,
+      box.y * pageScale,
+      box.w * pageScale,
+      box.h * pageScale,
+      0, 0, w, h
+    );
+    ctx.restore();
+    lbNo.textContent = labelOfKind(region);
+  }
+
+
 
   function closeLightbox() {
     if (lb) lb.hidden = true;

@@ -22,7 +22,7 @@ export function labelOf(region) {
 
 export function renderRegions(host, opts) {
   const doc = host.ownerDocument;
-  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb } = opts;
+  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb, onThumbClick } = opts;
   // 清掉上一轮挂在 body 上的类型弹层
   for (const old of doc.querySelectorAll('.opt-menu')) old.remove();
   host.textContent = '';
@@ -50,6 +50,10 @@ export function renderRegions(host, opts) {
       row.addEventListener('click', (ev) => {
         // 点控件（类型按钮/输入框）时不算"选中这一行"，否则列表重建会把弹层关掉
         if (ev.target && ev.target.closest && ev.target.closest('.inspector')) return;
+        if (ev.target && ev.target.closest && ev.target.closest('.region-thumb')) {
+          onThumbClick && onThumbClick(r);
+          return;
+        }
         onSelect(r);
       });
 

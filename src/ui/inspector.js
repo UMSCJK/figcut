@@ -1,27 +1,44 @@
-// 类型选择器：自己画的九宫格（题干 / A–K / 自定义输入），不用原生 select
+// 类型选择器：题干 + A–K 多选 + 自定义文本（同一个 figure 可以同时是 A 和 C）
 // 状态：已实现。
 
 export const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
 
-export function setKind(region, kind) {
-  if (kind === 'stem') {
-    region.kind = 'stem';
-    region.opt = null;
-  } else if (kind === 'custom') {
-    region.kind = 'opt';
-    region.opt = 'custom';
-  } else if (LETTERS.includes(kind)) {
-    region.kind = 'opt';
-    region.opt = kind;
+export function optsOf(region) {
+  if (Array.isArray(region.opts)) return region.opts.slice();
+  if (region.kind === 'opt' && region.opt) {
+    return region.opt === 'custom' ? (region.optText ? [region.optText] : []) : [region.opt];
   }
+  return [];
+}
+
+function writeOpts(region, list) {
+  region.opts = list;
+  region.kind = list.length ? 'opt' : 'stem';
+  // 兼容旧字段
+  region.opt = list.length === 1 && LETTERS.includes(list[0]) ? list[0] : list.length ? 'custom' : null;
+  region.optText = list.length ? list.filter((x) => !LETTERS.includes(x)).join(' ') : '';
   return region;
 }
 
-export function setCustomOption(region, text) {
-  region.kind = 'opt'; // 自定义也是"选项"，不是题干
-  region.opt = 'custom';
-  region.optText = String(text || '').trim();
+export function setKind(region, kind) {
+  if (kind === 'stem') writeOpts(region, []);
+  else if (kind === 'custom') writeOpts(region, region.optText ? [region.optText] : []);
+  else if (LETTERS.includes(kind)) writeOpts(region, [kind]);
   return region;
+}
+
+export function toggleLetter(region, letter) {
+  const list = optsOf(region);
+  const i = list.indexOf(letter);
+  if (i >= 0) list.splice(i, 1);
+  else list.push(letter);
+  return writeOpts(region, list);
+}
+
+export function setCustomOption(region, text) {
+  const clean = String(text || '').trim();
+  const letters = optsOf(region).filter((x) => LETTERS.includes(x));
+  return writeOpts(region, clean ? [...letters, clean] : letters);
 }
 
 export function setQuestion(region, q) {
@@ -34,27 +51,27 @@ export function setNote(region, note) {
   return region;
 }
 
-export function kindValue(region) {
-  if (region.kind !== 'opt') return 'stem';
-  return region.opt === 'custom' ? 'custom' : region.opt || 'A';
+export function labelOfKind(region) {
+  const list = optsOf(region);
+  if (!list.length) return '题干';
+  return list.join(' ');
 }
 
-export function labelOfKind(region) {
-  const v = kindValue(region);
-  if (v === 'stem') return '题干';
-  if (v === 'custom') return region.optText ? region.optText : '自定义';
-  return v;
+export function kindValue(region) {
+  const list = optsOf(region);
+  if (!list.length) return 'stem';
+  if (list.length === 1 && LETTERS.includes(list[0])) return list[0];
+  return 'custom';
 }
 
 export function buildControls(doc, region, onChange, opts = {}) {
   const row = doc.createElement('div');
   row.className = 'inspector';
 
-  // ---- 类型按钮 + 九宫格弹层 ----
   const kindBtn = doc.createElement('button');
   kindBtn.type = 'button';
   kindBtn.className = 'opt-btn';
-  kindBtn.title = '类型：题干 / A–K / 自定义';
+  kindBtn.title = '类型：题干 / A–K 可多选 / 自定义';
 
   const menu = doc.createElement('div');
   menu.className = 'opt-menu';
@@ -80,7 +97,7 @@ export function buildControls(doc, region, onChange, opts = {}) {
   custom.className = 'opt-cell opt-input';
   custom.type = 'text';
   custom.placeholder = '其他';
-  custom.value = region.optText || '';
+  custom.value = optsOf(region).filter((x) => !LETTERS.includes(x)).join(' ');
   custom.title = '自定义选项名';
   menu.appendChild(custom);
 
@@ -88,8 +105,12 @@ export function buildControls(doc, region, onChange, opts = {}) {
 
   function sync() {
     kindBtn.textContent = labelOfKind(region) + ' ▾';
-    for (const c of cells) c.classList.toggle('on', c.dataset.kind === kindValue(region));
-    custom.classList.toggle('on', kindValue(region) === 'custom');
+    const list = optsOf(region);
+    for (const c of cells) {
+      if (c.dataset.kind === 'stem') c.classList.toggle('on', list.length === 0);
+      else c.classList.toggle('on', list.includes(c.dataset.kind));
+    }
+    custom.classList.toggle('on', list.some((x) => !LETTERS.includes(x)));
   }
   sync();
 
@@ -113,9 +134,9 @@ export function buildControls(doc, region, onChange, opts = {}) {
 
   for (const c of cells) {
     c.addEventListener('click', () => {
-      setKind(region, c.dataset.kind);
+      if (c.dataset.kind === 'stem') setKind(region, 'stem');
+      else toggleLetter(region, c.dataset.kind);
       sync();
-      close();
       onChange(region, { structural: true });
     });
   }
@@ -125,7 +146,6 @@ export function buildControls(doc, region, onChange, opts = {}) {
     onChange(region, { quiet: true });
   });
 
-  // ---- 题号 / 备注 ----
   const q = doc.createElement('input');
   q.className = 'region-q';
   q.type = 'text';

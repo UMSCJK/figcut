@@ -30,14 +30,20 @@ export function optName(which) {
   return 'opt' + OPT_LETTERS[idx];
 }
 
-// 角色：stem / optA..optK / opt<自定义名>
+// 角色：stem / optA-optC / opt<自定义名>
 export function roleOf(region) {
-  if (region.kind !== 'opt') return 'stem';
-  if (region.opt === 'custom') {
-    const name = sanitize(region.optText, 12);
-    return 'opt' + (name || 'X');
-  }
-  return optName(region.opt === undefined || region.opt === null ? 0 : region.opt);
+  const list = Array.isArray(region.opts)
+    ? region.opts
+    : region.kind === 'opt' && region.opt
+      ? [region.opt === 'custom' ? (region.optText || 'X') : region.opt]
+      : [];
+  if (list.length === 0) return 'stem';
+  const names = list.map((item) => {
+    const letter = String(item).toUpperCase();
+    if (OPT_LETTERS.includes(letter) && String(item).length === 1) return 'opt' + letter;
+    return 'opt' + (sanitize(item, 12) || 'X');
+  });
+  return names.join('-');
 }
 
 // p09-q28-stem.png / p09-q29-optB-note.png
