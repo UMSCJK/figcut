@@ -4,14 +4,14 @@
 import { renderPage } from '../pdf/bitmap.js';
 import { buildInkMask } from '../pdf/ink.js';
 
-import { computeExportBox, withMargin, cropRect } from '../core/whitemargin.js';
+import { computeExportBox, growWhite, cropRect } from '../core/whitemargin.js';
 import { renderPngPx } from '../io/export.js';
 
 import { createZip, addFile, toBytes } from '../io/zip.js';
 import { regionFileName, zipName, pad } from '../core/naming.js';
 import { boundsOf } from '../view/editor.js';
 
-export const MASK_PPP = 2;
+export const MASK_PPP = 3;
 
 // 按页分组、页内按竖直位置排序，给出 p{页}-{序号}-{类型}.png
 export function planExports(regions) {
@@ -66,11 +66,14 @@ export async function exportZip(input) {
     const pageSize = page.getViewport({ scale: 1 });
 
     for (const item of plan.filter((p) => p.page === pageNo)) {
-      // 优先用画完就量好的缩紧框（v2 的 r.ink），没有才现算
-      const inkBox = item.region.ink || computeExportBox(mask, item.box);
-      if (!inkBox) continue;
-      const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
-      const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
+      // 优先用画完就算好的导出框（缩紧 + 只往白里长的 margin）
+      let box = item.region.box;
+      if (!box) {
+        const ink = item.region.ink || computeExportBox(mask, item.box);
+        if (!ink) continue;
+        box = growWhite(mask, ink, margin, pageSize.width, pageSize.height);
+      }
+      const crop = cropRect(box, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
       // 不做多边形蒙版：蒙版会切断跨边的墨迹，导出必须是完整矩形图
       const bytes = renderPngPx(hires, crop.px);

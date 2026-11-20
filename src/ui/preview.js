@@ -1,5 +1,5 @@
-// 右栏常驻预览：整页 + 所有框；选中时画导出裁切
-// 状态：已实现（canvas 2D）。
+// 右栏常驻预览：显示导出结果（缩紧框 + margin 的裁切）
+// 状态：已实现。按 devicePixelRatio 给足分辨率，别糊。
 
 export function createPreview(host) {
   const doc = host.ownerDocument;
@@ -10,37 +10,49 @@ export function createPreview(host) {
   return { canvas, host };
 }
 
+function sizeCanvas(canvas, w, h) {
+  const dpr = Math.min(3, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+  canvas.width = Math.max(1, Math.round(w * dpr));
+  canvas.height = Math.max(1, Math.round(h * dpr));
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return { ctx, dpr };
+}
+
 export function renderPreview(preview, opts) {
   const canvas = preview.canvas;
-  const ctx = canvas.getContext('2d');
   const { source, regions, selectedId, pageW, pageH, crop } = opts;
 
   if (crop) {
-    const w = Math.min(240, Math.max(80, Math.round(crop.w * 2)));
+    const maxW = opts.maxW || 232;
+    const w = Math.max(1, Math.round(Math.min(maxW, crop.w * (opts.zoom || 1.6))));
     const h = Math.max(1, Math.round((crop.h / crop.w) * w));
-    canvas.width = w;
-    canvas.height = h;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
+    const { ctx } = sizeCanvas(canvas, w, h);
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
     if (source) {
-      const sx = (crop.x / pageW) * source.width;
-      const sy = (crop.y / pageH) * source.height;
-      const sw = (crop.w / pageW) * source.width;
-      const sh = (crop.h / pageH) * source.height;
-      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, w, h);
+      ctx.drawImage(
+        source,
+        (crop.x / pageW) * source.width,
+        (crop.y / pageH) * source.height,
+        (crop.w / pageW) * source.width,
+        (crop.h / pageH) * source.height,
+        0,
+        0,
+        w,
+        h
+      );
     }
     return { mode: 'crop', w, h };
   }
 
-  const w = Math.min(240, Math.max(120, Math.round(pageW / 3)));
+  const w = Math.max(120, Math.round(pageW / 3));
   const h = Math.max(1, Math.round((pageH / pageW) * w));
-  canvas.width = w;
-  canvas.height = h;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
+  const { ctx } = sizeCanvas(canvas, w, h);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
   if (source) ctx.drawImage(source, 0, 0, w, h);

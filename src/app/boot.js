@@ -16,7 +16,7 @@ import { renderPageList } from '../ui/page-list.js';
 import { boundsOf } from '../view/editor.js';
 import { renderPage } from '../pdf/bitmap.js';
 import { buildInkMask } from '../pdf/ink.js';
-import { computeExportBox, withMargin } from '../core/whitemargin.js';
+import { computeExportBox, growWhite } from '../core/whitemargin.js';
 import {
   createEditor,
   setTool,
@@ -198,27 +198,47 @@ export function boot(opts = {}) {
     if (maskCache.has(pageNo)) return maskCache.get(pageNo);
     const p = stack.pages.find((x) => x.no === pageNo);
     if (!p) return null;
-    const canvas = await renderPage(p.page, { scale: 2, dpr: 1 });
+    // 2px/pt 的整页位图：既用来量墨迹，也当右栏预览的高清源
+    const canvas = await renderPage(p.page, { scale: 3, dpr: 1 });
     const img = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-    const mask = buildInkMask(img, { pxPerPt: 2 });
-    maskCache.set(pageNo, mask);
-    return mask;
+    const entry = { mask: buildInkMask(img, { pxPerPt: 3 }), canvas };
+    maskCache.set(pageNo, entry);
+    return entry;
+  }
+
+  function applyMeasure(region, entry) {
+    const shape = region.shape === 'poly' ? region.points : region.rect;
+    region.ink = computeExportBox(entry.mask, shape) || null;
+    region.box = region.ink
+      ? growWhite(entry.mask, region.ink, settings.margin, entry.mask.w / 2, entry.mask.h / 2)
+      : null;
   }
 
   function measureRegion(region) {
     if (!region) return;
-    const shape = region.shape === 'poly' ? region.points : region.rect;
     // 掩膜已经就绪就同步量，画完立刻能看到虚线框；否则后台补
     const cached = maskCache.get(region.page);
     if (cached) {
-      region.ink = computeExportBox(cached, shape) || null;
+      applyMeasure(region, cached);
       return;
     }
-    pageMask(region.page).then((mask) => {
-      if (!mask) return;
-      region.ink = computeExportBox(mask, shape) || null;
+    pageMask(region.page).then((entry) => {
+      if (!entry) return;
+      applyMeasure(region, entry);
       render();
     });
+  }
+
+  function remeasureAll() {
+    for (const region of ed.regions) {
+      const cached = maskCache.get(region.page);
+      if (cached) applyMeasure(region, cached);
+      else {
+        region.box = null;
+        measureRegion(region);
+      }
+    }
+    render();
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
@@ -244,15 +264,17 @@ export function boot(opts = {}) {
     const ov = overlays.get(ed.page);
     const pageW = ov ? ov.size.w : ed.pageW;
     const pageH = ov ? ov.size.h : ed.pageH;
+    // 预览用 2px/pt 的高清源，别拿屏幕上的小图放大
+    const hi = maskCache.get(ed.page);
     const stackPage = stack.pages.find((p) => p.no === ed.page);
-    const source = stackPage ? stackPage.canvas : null;
+    const source = hi ? hi.canvas : stackPage ? stackPage.canvas : null;
     const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === ed.page);
 
     // 没选中时右栏不放大缩略图（那是左栏的活），只留区域列表
     if (sel) {
       previewHost.hidden = false;
       // 预览显示的就是导出结果：缩紧后的框再扩 margin
-      const b = sel.ink ? withMargin(sel.ink, settings.margin, pageW, pageH) : boundsOf(sel);
+      const b = sel.box || sel.ink || boundsOf(sel);
       renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
     } else {
       previewHost.hidden = true;
@@ -365,6 +387,7 @@ export function boot(opts = {}) {
   marginInput.addEventListener('change', () => {
     marginInput.value = String(setMargin(settings, marginInput.value));
     saveSettings(storage, settings);
+    remeasureAll();
   });
 
   addButton(shell, 'right', '设置', () => {

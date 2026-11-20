@@ -134,10 +134,9 @@ export async function launch(opts = {}) {
       throw new Error('等条件超时: ' + expression);
     },
     async screenshot(outPath, opts2 = {}) {
-      const r = await send('Page.captureScreenshot', {
-        format: 'png',
-        captureBeyondViewport: !!opts2.fullPage,
-      });
+      const params = { format: 'png', captureBeyondViewport: !!opts2.fullPage };
+      if (opts2.clip) params.clip = { ...opts2.clip, scale: opts2.clip.scale || 1 };
+      const r = await send('Page.captureScreenshot', params);
       fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
       fs.writeFileSync(outPath, Buffer.from(r.data, 'base64'));
       return outPath;

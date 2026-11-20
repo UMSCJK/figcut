@@ -72,14 +72,13 @@ export function drawRegions(overlay, regions, opts = {}) {
   if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
 
   // 真正会导出的框：缩紧到墨迹后再扩 margin，虚线画出来
-  const ink = opts.selected && opts.selected.ink;
-  if (ink) {
-    const m = opts.margin || 0;
+  const box = opts.selected && (opts.selected.box || opts.selected.ink);
+  if (box) {
     const crop = doc.createElementNS(NS, 'rect');
-    crop.setAttribute('x', ink.x - m);
-    crop.setAttribute('y', ink.y - m);
-    crop.setAttribute('width', ink.w + m * 2);
-    crop.setAttribute('height', ink.h + m * 2);
+    crop.setAttribute('x', box.x);
+    crop.setAttribute('y', box.y);
+    crop.setAttribute('width', box.w);
+    crop.setAttribute('height', box.h);
     crop.setAttribute('class', 'cropbox');
     overlay.svg.appendChild(crop);
   }

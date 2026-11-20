@@ -1732,14 +1732,13 @@ function drawRegions(overlay, regions, opts = {}) {
   if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
 
   // 真正会导出的框：缩紧到墨迹后再扩 margin，虚线画出来
-  const ink = opts.selected && opts.selected.ink;
-  if (ink) {
-    const m = opts.margin || 0;
+  const box = opts.selected && (opts.selected.box || opts.selected.ink);
+  if (box) {
     const crop = doc.createElementNS(NS, 'rect');
-    crop.setAttribute('x', ink.x - m);
-    crop.setAttribute('y', ink.y - m);
-    crop.setAttribute('width', ink.w + m * 2);
-    crop.setAttribute('height', ink.h + m * 2);
+    crop.setAttribute('x', box.x);
+    crop.setAttribute('y', box.y);
+    crop.setAttribute('width', box.w);
+    crop.setAttribute('height', box.h);
     crop.setAttribute('class', 'cropbox');
     overlay.svg.appendChild(crop);
   }
@@ -1796,8 +1795,8 @@ function hitTest(ed, pt, regionAtFn) {
 }
 
 // ---- src/ui/preview.js ----
-// 右栏常驻预览：整页 + 所有框；选中时画导出裁切
-// 状态：已实现（canvas 2D）。
+// 右栏常驻预览：显示导出结果（缩紧框 + margin 的裁切）
+// 状态：已实现。按 devicePixelRatio 给足分辨率，别糊。
 
 function createPreview(host) {
   const doc = host.ownerDocument;
@@ -1808,37 +1807,49 @@ function createPreview(host) {
   return { canvas, host };
 }
 
+function sizeCanvas(canvas, w, h) {
+  const dpr = Math.min(3, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+  canvas.width = Math.max(1, Math.round(w * dpr));
+  canvas.height = Math.max(1, Math.round(h * dpr));
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return { ctx, dpr };
+}
+
 function renderPreview(preview, opts) {
   const canvas = preview.canvas;
-  const ctx = canvas.getContext('2d');
   const { source, regions, selectedId, pageW, pageH, crop } = opts;
 
   if (crop) {
-    const w = Math.min(240, Math.max(80, Math.round(crop.w * 2)));
+    const maxW = opts.maxW || 232;
+    const w = Math.max(1, Math.round(Math.min(maxW, crop.w * (opts.zoom || 1.6))));
     const h = Math.max(1, Math.round((crop.h / crop.w) * w));
-    canvas.width = w;
-    canvas.height = h;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
+    const { ctx } = sizeCanvas(canvas, w, h);
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
     if (source) {
-      const sx = (crop.x / pageW) * source.width;
-      const sy = (crop.y / pageH) * source.height;
-      const sw = (crop.w / pageW) * source.width;
-      const sh = (crop.h / pageH) * source.height;
-      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, w, h);
+      ctx.drawImage(
+        source,
+        (crop.x / pageW) * source.width,
+        (crop.y / pageH) * source.height,
+        (crop.w / pageW) * source.width,
+        (crop.h / pageH) * source.height,
+        0,
+        0,
+        w,
+        h
+      );
     }
     return { mode: 'crop', w, h };
   }
 
-  const w = Math.min(240, Math.max(120, Math.round(pageW / 3)));
+  const w = Math.max(120, Math.round(pageW / 3));
   const h = Math.max(1, Math.round((pageH / pageW) * w));
-  canvas.width = w;
-  canvas.height = h;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
+  const { ctx } = sizeCanvas(canvas, w, h);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
   if (source) ctx.drawImage(source, 0, 0, w, h);
@@ -2403,7 +2414,7 @@ function computeExportBox(mask, shape) {
   };
 }
 
-// 每边加边距，夹在页内
+// 每边加边距，夹在页内（不看墨迹）
 function withMargin(box, margin, pageW, pageH) {
   const m = margin > 0 ? margin : 0;
   const x0 = Math.max(0, box.x - m);
@@ -2411,6 +2422,37 @@ function withMargin(box, margin, pageW, pageH) {
   const x1 = Math.min(pageW, box.x + box.w + m);
   const y1 = Math.min(pageH, box.y + box.h + m);
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// 加边距，但只往白里长：哪条边走边碰到墨就停在那儿。
+// 这样 margin 不会把旁边的横线、题号拖进导出图。
+function growWhite(mask, box, margin, pageW, pageH) {
+  if (!(margin > 0)) return { ...box };
+  const s = mask.pxPerPt;
+  const maxPx = Math.max(0, Math.round(margin * s));
+  if (!maxPx) return { ...box };
+  const c = (v, hi) => Math.min(hi, Math.max(0, v));
+
+  let l = c(Math.floor(box.x * s), mask.w - 1);
+  let t = c(Math.floor(box.y * s), mask.h - 1);
+  let r = c(Math.ceil((box.x + box.w) * s) - 1, mask.w - 1);
+  let b = c(Math.ceil((box.y + box.h) * s) - 1, mask.h - 1);
+
+  const colWhite = (x) => {
+    for (let y = t; y <= b; y += 1) if (mask.data[y * mask.w + x]) return false;
+    return true;
+  };
+  const rowWhite = (y) => {
+    for (let x = l; x <= r; x += 1) if (mask.data[y * mask.w + x]) return false;
+    return true;
+  };
+
+  for (let n = 0; n < maxPx && l > 0 && colWhite(l - 1); n += 1) l -= 1;
+  for (let n = 0; n < maxPx && r < mask.w - 1 && colWhite(r + 1); n += 1) r += 1;
+  for (let n = 0; n < maxPx && t > 0 && rowWhite(t - 1); n += 1) t -= 1;
+  for (let n = 0; n < maxPx && b < mask.h - 1 && rowWhite(b + 1); n += 1) b += 1;
+
+  return { x: l / s, y: t / s, w: (r - l + 1) / s, h: (b - t + 1) / s };
 }
 
 // 对齐到导出像素网格：向内取整，不重采样
@@ -3030,7 +3072,7 @@ function toBlob(zip) {
 
 
 
-const MASK_PPP = 2;
+const MASK_PPP = 3;
 
 // 按页分组、页内按竖直位置排序，给出 p{页}-{序号}-{类型}.png
 function planExports(regions) {
@@ -3085,11 +3127,14 @@ async function exportZip(input) {
     const pageSize = page.getViewport({ scale: 1 });
 
     for (const item of plan.filter((p) => p.page === pageNo)) {
-      // 优先用画完就量好的缩紧框（v2 的 r.ink），没有才现算
-      const inkBox = item.region.ink || computeExportBox(mask, item.box);
-      if (!inkBox) continue;
-      const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
-      const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
+      // 优先用画完就算好的导出框（缩紧 + 只往白里长的 margin）
+      let box = item.region.box;
+      if (!box) {
+        const ink = item.region.ink || computeExportBox(mask, item.box);
+        if (!ink) continue;
+        box = growWhite(mask, ink, margin, pageSize.width, pageSize.height);
+      }
+      const crop = cropRect(box, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
       // 不做多边形蒙版：蒙版会切断跨边的墨迹，导出必须是完整矩形图
       const bytes = renderPngPx(hires, crop.px);
@@ -3581,27 +3626,47 @@ function boot(opts = {}) {
     if (maskCache.has(pageNo)) return maskCache.get(pageNo);
     const p = stack.pages.find((x) => x.no === pageNo);
     if (!p) return null;
-    const canvas = await renderPage(p.page, { scale: 2, dpr: 1 });
+    // 2px/pt 的整页位图：既用来量墨迹，也当右栏预览的高清源
+    const canvas = await renderPage(p.page, { scale: 3, dpr: 1 });
     const img = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-    const mask = buildInkMask(img, { pxPerPt: 2 });
-    maskCache.set(pageNo, mask);
-    return mask;
+    const entry = { mask: buildInkMask(img, { pxPerPt: 3 }), canvas };
+    maskCache.set(pageNo, entry);
+    return entry;
+  }
+
+  function applyMeasure(region, entry) {
+    const shape = region.shape === 'poly' ? region.points : region.rect;
+    region.ink = computeExportBox(entry.mask, shape) || null;
+    region.box = region.ink
+      ? growWhite(entry.mask, region.ink, settings.margin, entry.mask.w / 2, entry.mask.h / 2)
+      : null;
   }
 
   function measureRegion(region) {
     if (!region) return;
-    const shape = region.shape === 'poly' ? region.points : region.rect;
     // 掩膜已经就绪就同步量，画完立刻能看到虚线框；否则后台补
     const cached = maskCache.get(region.page);
     if (cached) {
-      region.ink = computeExportBox(cached, shape) || null;
+      applyMeasure(region, cached);
       return;
     }
-    pageMask(region.page).then((mask) => {
-      if (!mask) return;
-      region.ink = computeExportBox(mask, shape) || null;
+    pageMask(region.page).then((entry) => {
+      if (!entry) return;
+      applyMeasure(region, entry);
       render();
     });
+  }
+
+  function remeasureAll() {
+    for (const region of ed.regions) {
+      const cached = maskCache.get(region.page);
+      if (cached) applyMeasure(region, cached);
+      else {
+        region.box = null;
+        measureRegion(region);
+      }
+    }
+    render();
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
@@ -3627,15 +3692,17 @@ function boot(opts = {}) {
     const ov = overlays.get(ed.page);
     const pageW = ov ? ov.size.w : ed.pageW;
     const pageH = ov ? ov.size.h : ed.pageH;
+    // 预览用 2px/pt 的高清源，别拿屏幕上的小图放大
+    const hi = maskCache.get(ed.page);
     const stackPage = stack.pages.find((p) => p.no === ed.page);
-    const source = stackPage ? stackPage.canvas : null;
+    const source = hi ? hi.canvas : stackPage ? stackPage.canvas : null;
     const sel = ed.regions.find((r) => r.id === ed.selectedId && r.page === ed.page);
 
     // 没选中时右栏不放大缩略图（那是左栏的活），只留区域列表
     if (sel) {
       previewHost.hidden = false;
       // 预览显示的就是导出结果：缩紧后的框再扩 margin
-      const b = sel.ink ? withMargin(sel.ink, settings.margin, pageW, pageH) : boundsOf(sel);
+      const b = sel.box || sel.ink || boundsOf(sel);
       renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
     } else {
       previewHost.hidden = true;
@@ -3748,6 +3815,7 @@ function boot(opts = {}) {
   marginInput.addEventListener('change', () => {
     marginInput.value = String(setMargin(settings, marginInput.value));
     saveSettings(storage, settings);
+    remeasureAll();
   });
 
   addButton(shell, 'right', '设置', () => {

@@ -197,7 +197,7 @@ export function computeExportBox(mask, shape) {
   };
 }
 
-// 每边加边距，夹在页内
+// 每边加边距，夹在页内（不看墨迹）
 export function withMargin(box, margin, pageW, pageH) {
   const m = margin > 0 ? margin : 0;
   const x0 = Math.max(0, box.x - m);
@@ -205,6 +205,37 @@ export function withMargin(box, margin, pageW, pageH) {
   const x1 = Math.min(pageW, box.x + box.w + m);
   const y1 = Math.min(pageH, box.y + box.h + m);
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// 加边距，但只往白里长：哪条边走边碰到墨就停在那儿。
+// 这样 margin 不会把旁边的横线、题号拖进导出图。
+export function growWhite(mask, box, margin, pageW, pageH) {
+  if (!(margin > 0)) return { ...box };
+  const s = mask.pxPerPt;
+  const maxPx = Math.max(0, Math.round(margin * s));
+  if (!maxPx) return { ...box };
+  const c = (v, hi) => Math.min(hi, Math.max(0, v));
+
+  let l = c(Math.floor(box.x * s), mask.w - 1);
+  let t = c(Math.floor(box.y * s), mask.h - 1);
+  let r = c(Math.ceil((box.x + box.w) * s) - 1, mask.w - 1);
+  let b = c(Math.ceil((box.y + box.h) * s) - 1, mask.h - 1);
+
+  const colWhite = (x) => {
+    for (let y = t; y <= b; y += 1) if (mask.data[y * mask.w + x]) return false;
+    return true;
+  };
+  const rowWhite = (y) => {
+    for (let x = l; x <= r; x += 1) if (mask.data[y * mask.w + x]) return false;
+    return true;
+  };
+
+  for (let n = 0; n < maxPx && l > 0 && colWhite(l - 1); n += 1) l -= 1;
+  for (let n = 0; n < maxPx && r < mask.w - 1 && colWhite(r + 1); n += 1) r += 1;
+  for (let n = 0; n < maxPx && t > 0 && rowWhite(t - 1); n += 1) t -= 1;
+  for (let n = 0; n < maxPx && b < mask.h - 1 && rowWhite(b + 1); n += 1) b += 1;
+
+  return { x: l / s, y: t / s, w: (r - l + 1) / s, h: (b - t + 1) / s };
 }
 
 // 对齐到导出像素网格：向内取整，不重采样
