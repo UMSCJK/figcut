@@ -83,7 +83,7 @@ if (dump) {
 const textPath = arg('text', null);
 const words = textPath ? parseWordBoxes(fs.readFileSync(textPath, 'utf8')) : [];
 const textRects = textBoxesOnPage(words, rect);
-const box = computeExportBox(mask, rect, { maxShift: 12, textRects });
+const box = computeExportBox(mask, rect);
 const x0 = Math.round(box.x * ppp);
 const y0 = Math.round(box.y * ppp);
 const x1 = Math.round((box.x + box.w) * ppp) - 1;

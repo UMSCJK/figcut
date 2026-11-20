@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { buildInkMask, components } from '../src/pdf/ink.js';
 import { parseWordBoxes, textBoxesOnPage } from '../src/pdf/textlayer.js';
-import { computeExportBox, growToWhite, cropRect, isWhiteRow, isWhiteCol } from '../src/core/whitemargin.js';
+import { computeExportBox, withMargin, cropRect, isWhiteRow, isWhiteCol } from '../src/core/whitemargin.js';
 import { renderPngPx } from '../src/io/export.js';
 
 const PDF = process.argv[2] || 'tmp/corpus/m.pdf';
@@ -71,8 +71,8 @@ for (const page of PAGES) {
   const pageW = maskImg.width / 2;
   const pageH = maskImg.height / 2;
 
-  const ink = computeExportBox(mask, loose, { textRects: words });
-  const grown = growToWhite(hiMask, ink, MARGIN, pageW, pageH);
+  const ink = computeExportBox(mask, loose);
+  const grown = withMargin(ink, MARGIN, pageW, pageH);
   const crop = cropRect(grown, pageW, pageH, DPI / 72);
   const png = renderPngPx(hiImg, crop.px);
   const file = path.join(OUT, 'p' + page + '.png');

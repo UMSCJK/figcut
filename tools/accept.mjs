@@ -53,7 +53,7 @@ const intersections = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y 
 
 function run(name, rectPt) {
   const textRects = textBoxesOnPage(words, rectPt);
-  const box = computeExportBox(mask, rectPt, { maxShift: 12, textRects });
+  const box = computeExportBox(mask, rectPt);
 
   const x0 = Math.round(box.x * ppp);
   const y0 = Math.round(box.y * ppp);

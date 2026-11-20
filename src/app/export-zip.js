@@ -3,10 +3,10 @@
 
 import { renderPage } from '../pdf/bitmap.js';
 import { buildInkMask } from '../pdf/ink.js';
-import { readTextLayer } from '../pdf/textlayer.js';
-import { computeExportBox } from '../core/whitemargin.js';
+
+import { computeExportBox, withMargin, cropRect } from '../core/whitemargin.js';
 import { renderPngPx } from '../io/export.js';
-import { growToWhite, cropRect } from '../core/whitemargin.js';
+
 import { createZip, addFile, toBytes } from '../io/zip.js';
 import { regionFileName, zipName, pad } from '../core/naming.js';
 import { boundsOf } from '../view/editor.js';
@@ -60,18 +60,17 @@ export async function exportZip(input) {
     const page = await doc.pdf.getPage(pageNo);
     const maskImage = await imageOf(page, MASK_PPP);
     const mask = buildInkMask(maskImage, { pxPerPt: MASK_PPP });
-    const words = await readTextLayer(page); // 整页文字都要挖掉，不只是框里的
+
 
     const hires = await imageOf(page, scale);
-    // 导出分辨率的掩膜：边距只能往这张图的白色里长
-    const hiMask = buildInkMask(hires, { pxPerPt: scale });
     const pageSize = page.getViewport({ scale: 1 });
 
     for (const item of plan.filter((p) => p.page === pageNo)) {
-      // 注意：传整页文字。只传框里的词会让框边外那截文字被当成笔画，框被它一路拉大
-      const inkBox = computeExportBox(mask, item.box, { textRects: words });
-      const grown = growToWhite(hiMask, inkBox, margin, pageSize.width, pageSize.height);
-      const crop = cropRect(grown, pageSize.width, pageSize.height, scale);
+      // 框内非白像素的外接框 + 每边 margin（v2 语义）
+      const inkBox = computeExportBox(mask, item.box);
+      if (!inkBox) continue;
+      const withM = withMargin(inkBox, margin, pageSize.width, pageSize.height);
+      const crop = cropRect(withM, pageSize.width, pageSize.height, scale);
       const exportBox = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
       const bytes = renderPngPx(hires, crop.px);
       addFile(zip, item.name, bytes);
