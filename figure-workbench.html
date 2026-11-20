@@ -4322,9 +4322,22 @@ function boot(opts = {}) {
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
+  const thumbPending = new Set();
+
   function thumbFor(no) {
     const p = stack.pages.find((x) => x.no === no);
-    if (!p || !p.canvas || !p.canvas.width) return null;
+    if (!p || !p.canvas || !p.canvas.width) {
+      // 位图还没画好：等它好了强制重建一次列表，否则缩略图会一直空着
+      if (!thumbPending.has(no)) {
+        thumbPending.add(no);
+        setTimeout(() => {
+          thumbPending.delete(no);
+          lastListSig = '';
+          render();
+        }, 250);
+      }
+      return null;
+    }
     const W = 300;
     const H = Math.round((W * 842) / 595);
     const c = document.createElement('canvas');
@@ -4939,8 +4952,21 @@ function boot(opts = {}) {
 
   function applyLayout() {
     const root = document.documentElement;
-    root.style.setProperty('--w-side', (layout.leftCollapsed ? COLLAPSED_W : layout.side || 210) + 'px');
-    root.style.setProperty('--w-panel', (layout.rightCollapsed ? COLLAPSED_W : layout.panel || 250) + 'px');
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1400;
+    // 保证中间画布至少 420px，侧栏再大也不许把画布挤没
+    const minCanvas = 420;
+    const wantSide = layout.side || 210;
+    const wantPanel = layout.panel || 250;
+    const avail = Math.max(240, vw - minCanvas - 10);
+    let side = wantSide;
+    let panel = wantPanel;
+    if (side + panel > avail) {
+      const k = avail / (side + panel);
+      side = Math.max(120, Math.floor(side * k));
+      panel = Math.max(160, Math.floor(panel * k));
+    }
+    root.style.setProperty('--w-side', (layout.leftCollapsed ? COLLAPSED_W : side) + 'px');
+    root.style.setProperty('--w-panel', (layout.rightCollapsed ? COLLAPSED_W : panel) + 'px');
     shell.panelLeft.classList.toggle('is-collapsed', !!layout.leftCollapsed);
     shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
   }
