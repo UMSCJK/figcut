@@ -1,11 +1,11 @@
-/* 导出框 = 手画选区（钢笔或矩形）**填充成矩形**后，取该矩形内非白像素的最小外接框，
-   再每边加边距。这是需求里写死的链路：
-     钢笔框选 → 填充为矩形 → 收缩背景至非白色像素 → 扩展 margin
-   三条硬约束：
-     - 多边形只用来定"看哪一块"，导出永远是一个完整的矩形图，不做多边形蒙版
-       （蒙版会把跨边的墨迹切掉，图就不完整了）。
-     - 不做纯白吸附：外接框本身就是紧的；纯白四边由 margin 提供。
-     - 不猜笔画归属：框里有什么非白像素就算什么，框要人画准。
+/* 导出框 = 选区内非白像素的最外接框，再每边扩 margin（导出仍是完整矩形图）。
+   需求原文：钢笔框选 → 收缩背景至非白色像素 → 扩展 margin
+
+   要点：
+     - **只算多边形内部的像素**。多边形存在的意义就是排除矩形躲不开的东西
+       （相邻图、边框、题号），所以框外哪怕有墨也不算进外接框。
+     - 导出不做多边形蒙版：裁出来是完整矩形图，跨到边界上的内容不会被切掉形状。
+     - 不做纯白吸附：外接框本身贴墨迹，纯白四边由 margin 提供。
    坐标：进来 pt，内部 px，出去 pt。 */
 
 export const INK_T = 246;   // 任一通道低于它就算非白
@@ -185,9 +185,8 @@ export function fillToRect(shape) {
 }
 
 export function computeExportBox(mask, shape) {
-  // 先填成矩形，再把与矩形相交的笔画整根纳入：跨边的线不会被切断
-  const rect = fillToRect(shape);
-  const b = contentBounds(mask, rect) || inkBounds(mask, rect);
+  // 只量多边形内部的非白像素：多边形用来排除矩形躲不开的内容
+  const b = inkBounds(mask, shape) || inkBounds(mask, fillToRect(shape));
   if (!b) return null;
   const s = mask.pxPerPt;
   return {

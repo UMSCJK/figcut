@@ -1713,14 +1713,15 @@ function drawRegions(overlay, regions, opts = {}) {
   // 选中态画手柄，能拖哪儿一眼看得出
   if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
 
-  // 缩紧后的导出框：虚线画出来（v2 的 cropbox）
+  // 真正会导出的框：缩紧到墨迹后再扩 margin，虚线画出来
   const ink = opts.selected && opts.selected.ink;
   if (ink) {
+    const m = opts.margin || 0;
     const crop = doc.createElementNS(NS, 'rect');
-    crop.setAttribute('x', ink.x);
-    crop.setAttribute('y', ink.y);
-    crop.setAttribute('width', ink.w);
-    crop.setAttribute('height', ink.h);
+    crop.setAttribute('x', ink.x - m);
+    crop.setAttribute('y', ink.y - m);
+    crop.setAttribute('width', ink.w + m * 2);
+    crop.setAttribute('height', ink.h + m * 2);
     crop.setAttribute('class', 'cropbox');
     overlay.svg.appendChild(crop);
   }
@@ -2162,14 +2163,14 @@ function strokeAt(mask, x, y) {
 }
 
 // ---- src/core/whitemargin.js ----
-/* 导出框 = 手画选区（钢笔或矩形）**填充成矩形**后，取该矩形内非白像素的最小外接框，
-   再每边加边距。这是需求里写死的链路：
-     钢笔框选 → 填充为矩形 → 收缩背景至非白色像素 → 扩展 margin
-   三条硬约束：
-     - 多边形只用来定"看哪一块"，导出永远是一个完整的矩形图，不做多边形蒙版
-       （蒙版会把跨边的墨迹切掉，图就不完整了）。
-     - 不做纯白吸附：外接框本身就是紧的；纯白四边由 margin 提供。
-     - 不猜笔画归属：框里有什么非白像素就算什么，框要人画准。
+/* 导出框 = 选区内非白像素的最外接框，再每边扩 margin（导出仍是完整矩形图）。
+   需求原文：钢笔框选 → 收缩背景至非白色像素 → 扩展 margin
+
+   要点：
+     - **只算多边形内部的像素**。多边形存在的意义就是排除矩形躲不开的东西
+       （相邻图、边框、题号），所以框外哪怕有墨也不算进外接框。
+     - 导出不做多边形蒙版：裁出来是完整矩形图，跨到边界上的内容不会被切掉形状。
+     - 不做纯白吸附：外接框本身贴墨迹，纯白四边由 margin 提供。
    坐标：进来 pt，内部 px，出去 pt。 */
 
 const INK_T = 246;   // 任一通道低于它就算非白
@@ -2349,9 +2350,8 @@ function fillToRect(shape) {
 }
 
 function computeExportBox(mask, shape) {
-  // 先填成矩形，再把与矩形相交的笔画整根纳入：跨边的线不会被切断
-  const rect = fillToRect(shape);
-  const b = contentBounds(mask, rect) || inkBounds(mask, rect);
+  // 只量多边形内部的非白像素：多边形用来排除矩形躲不开的内容
+  const b = inkBounds(mask, shape) || inkBounds(mask, fillToRect(shape));
   if (!b) return null;
   const s = mask.pxPerPt;
   return {
@@ -3586,7 +3586,8 @@ function boot(opts = {}) {
     // 没选中时右栏不放大缩略图（那是左栏的活），只留区域列表
     if (sel) {
       previewHost.hidden = false;
-      const b = boundsOf(sel);
+      // 预览显示的就是导出结果：缩紧后的框再扩 margin
+      const b = sel.ink ? withMargin(sel.ink, settings.margin, pageW, pageH) : boundsOf(sel);
       renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
     } else {
       previewHost.hidden = true;
@@ -3631,6 +3632,7 @@ function boot(opts = {}) {
         selected: page === ed.page ? ed.regions.find((r) => r.id === ed.selectedId) || null : null,
         draft: page === ed.page ? ed.draft : null,
         scale: zoom.scale,
+        margin: settings.margin,
       });
     }
     renderPanels();

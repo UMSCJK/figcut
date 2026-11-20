@@ -100,3 +100,27 @@ test('whitemargin: 白/墨判定与标签落点', () => {
   const spot = findLabelSpot(m, label, [{ x: 1, y: 1 }, { x: 30, y: 30 }]);
   assert(spot && spot.x === 30);
 });
+
+test('whitemargin: 多边形外的墨迹不参与定框（避开矩形躲不开的内容）', () => {
+  const m = makeMask(300, 300);
+  fill(m, 20, 60, 40, 40);   // 框外的干扰图形
+  fill(m, 160, 100, 60, 60); // 多边形里的目标
+  const poly = [
+    { x: 70, y: 40 },
+    { x: 130, y: 40 },
+    { x: 130, y: 90 },
+    { x: 70, y: 90 },
+  ];
+  const box = computeExportBox(m, poly);
+  assert(box.x === 80 && box.y === 50, JSON.stringify(box));
+  assert(box.w === 30 && box.h === 30, '只含目标：' + JSON.stringify(box));
+});
+
+test('whitemargin: 矩形选区会把手伸到画面外的东西也框进来（对照）', () => {
+  const m = makeMask(300, 300);
+  fill(m, 20, 60, 40, 40);
+  fill(m, 160, 100, 60, 60);
+  const rect = { x: 0, y: 0, w: 150, h: 150 };
+  const box = computeExportBox(m, rect);
+  assert(box.x === 10, '矩形只能从最左的墨开始：' + box.x);
+});

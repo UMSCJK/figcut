@@ -16,7 +16,7 @@ import { renderPageList } from '../ui/page-list.js';
 import { boundsOf } from '../view/editor.js';
 import { renderPage } from '../pdf/bitmap.js';
 import { buildInkMask } from '../pdf/ink.js';
-import { computeExportBox } from '../core/whitemargin.js';
+import { computeExportBox, withMargin } from '../core/whitemargin.js';
 import {
   createEditor,
   setTool,
@@ -244,7 +244,8 @@ export function boot(opts = {}) {
     // 没选中时右栏不放大缩略图（那是左栏的活），只留区域列表
     if (sel) {
       previewHost.hidden = false;
-      const b = boundsOf(sel);
+      // 预览显示的就是导出结果：缩紧后的框再扩 margin
+      const b = sel.ink ? withMargin(sel.ink, settings.margin, pageW, pageH) : boundsOf(sel);
       renderPreview(preview, { source, pageW, pageH, selectedId: sel.id, regions: regionsOfPage(ed.regions, ed.page), crop: b });
     } else {
       previewHost.hidden = true;
@@ -289,6 +290,7 @@ export function boot(opts = {}) {
         selected: page === ed.page ? ed.regions.find((r) => r.id === ed.selectedId) || null : null,
         draft: page === ed.page ? ed.draft : null,
         scale: zoom.scale,
+        margin: settings.margin,
       });
     }
     renderPanels();

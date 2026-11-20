@@ -71,14 +71,15 @@ export function drawRegions(overlay, regions, opts = {}) {
   // 选中态画手柄，能拖哪儿一眼看得出
   if (opts.selected) addHandles(doc, overlay.svg, opts.selected, opts.scale || 1);
 
-  // 缩紧后的导出框：虚线画出来（v2 的 cropbox）
+  // 真正会导出的框：缩紧到墨迹后再扩 margin，虚线画出来
   const ink = opts.selected && opts.selected.ink;
   if (ink) {
+    const m = opts.margin || 0;
     const crop = doc.createElementNS(NS, 'rect');
-    crop.setAttribute('x', ink.x);
-    crop.setAttribute('y', ink.y);
-    crop.setAttribute('width', ink.w);
-    crop.setAttribute('height', ink.h);
+    crop.setAttribute('x', ink.x - m);
+    crop.setAttribute('y', ink.y - m);
+    crop.setAttribute('width', ink.w + m * 2);
+    crop.setAttribute('height', ink.h + m * 2);
     crop.setAttribute('class', 'cropbox');
     overlay.svg.appendChild(crop);
   }
