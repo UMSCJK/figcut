@@ -215,3 +215,18 @@
 /* PDF 预览反相：只反相纸面，覆盖层与界面保持原色 */
 :root[data-pdf-invert="1"] .page canvas { filter: invert(1); }
 :root[data-pdf-invert="1"] .preview-canvas { filter: invert(1); }
+
+.page-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 16px auto;
+  width: max-content;
+}
+
+.page-row .page { margin: 0; }
+
+.page-row { display: grid; grid-template-columns: auto auto; }
+.page-row[data-single="right"] > .page { grid-column: 2; }
+.page-row[data-single="left"] > .page { grid-column: 1; }

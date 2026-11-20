@@ -410,6 +410,9 @@ export function boot(opts = {}) {
       const v = nudgeVector(ev);
       if (nudge(ed, v.dx, v.dy)) { record('nudge'); render(); }
     },
+    'view.continuous': () => stack.applyLayout({ continuous: !stack.view.continuous }),
+    'view.dual': () => stack.applyLayout({ dual: !stack.view.dual }),
+    'view.oddLeft': () => stack.applyLayout({ oddLeft: !stack.view.oddLeft }),
     'view.invert': () => {
       theme.pdf = isInverted(theme, prefersDark()) ? 'normal' : 'invert';
       applyColors();
