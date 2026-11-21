@@ -16,8 +16,10 @@
   </header>
   <main class="body" id="body">
     <aside class="sidebar" id="panel-left">
-      <div class="side-head" id="side-head">页面</div>
-      <button type="button" class="side-toggle" id="toggle-left" title="收起/展开左栏"></button>
+      <div class="side-head" id="side-head">
+        <span class="side-title">页面</span>
+      </div>
+      <button type="button" class="rail-toggle" id="rail-left" title="展开左栏" hidden></button>
     </aside>
     <div class="splitter" id="split-left" title="拖动调整宽度，双击折叠"></div>
     <div class="canvas" id="canvas">
@@ -30,20 +32,27 @@
     <div class="splitter" id="split-right" title="拖动调整宽度，双击复位"></div>
     <div class="lightbox" id="lightbox" hidden>
       <div class="lightbox-inner">
-        <canvas class="lightbox-canvas" id="lightbox-canvas"></canvas>
+        <div class="lightbox-stage" id="lightbox-stage">
+          <canvas class="lightbox-canvas" id="lightbox-canvas"></canvas>
+        </div>
         <div class="lightbox-bar">
-          <button type="button" class="icon-btn" id="lb-prev" title="上一页">‹</button>
+          <button type="button" class="icon-btn" id="lb-prev" title="上一个">‹</button>
           <span class="lightbox-no" id="lb-no">1</span>
-          <button type="button" class="icon-btn" id="lb-next" title="下一页">›</button>
+          <button type="button" class="icon-btn" id="lb-next" title="下一个">›</button>
           <span class="lightbox-sep"></span>
           <button type="button" class="icon-btn" id="lb-zoom-out" title="缩小">−</button>
-          <button type="button" class="icon-btn" id="lb-fit" title="适应窗口">适应</button>
+          <button type="button" class="icon-btn" id="lb-zoom" title="实际大小">100%</button>
           <button type="button" class="icon-btn" id="lb-zoom-in" title="放大">+</button>
+          <button type="button" class="icon-btn" id="lb-fit" title="适应窗口">适应</button>
+          <button type="button" class="icon-btn" id="lb-close" title="关闭 (Esc)">✕</button>
         </div>
       </div>
     </div>
     <aside class="panel" id="panel-right">
-      <button type="button" class="side-toggle is-right" id="toggle-right" title="收起/展开右栏"></button>
+      <div class="side-head" id="panel-head">
+        <span class="side-title">标注</span>
+      </div>
+      <button type="button" class="rail-toggle is-right" id="rail-right" title="展开右栏" hidden></button>
     </aside>
   </main>
   <div class="banner" id="banner" hidden></div>

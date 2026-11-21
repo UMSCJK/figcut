@@ -754,24 +754,46 @@ export function boot(opts = {}) {
   const lbNo = document.getElementById('lb-no');
   let lbPage = 1;
   let lbMode = 'page'; // 'page' = PDF 页预览，'figure' = 单个 figure 预览
-  let lbZoom = 1;
   let lbFigures = [];
   let lbFigureIndex = 0;
+  const lbView = { scale: 1, x: 0, y: 0 };
+  const lbStage = document.getElementById('lightbox-stage');
+  const lbZoomBtn = document.getElementById('lb-zoom');
 
-  // 让大图先适配窗口，之后滚轮可缩放、按住拖动平移
-  function fitLbZoom() {
-    const inner = document.querySelector('.lightbox-inner');
-    if (!inner || !lbCanvas.width) return;
-    const availW = Math.min(window.innerWidth * 0.94, inner.clientWidth || window.innerWidth * 0.94);
-    const availH = window.innerHeight * 0.84;
-    lbZoom = Math.min(1, availW / lbCanvas.width, availH / lbCanvas.height);
-    if (!(lbZoom > 0)) lbZoom = 1;
-    applyLbZoom();
+  function lbApply() {
+    lbCanvas.style.transform =
+      'translate(' + lbView.x + 'px,' + lbView.y + 'px) scale(' + lbView.scale + ')';
+    if (lbZoomBtn) lbZoomBtn.textContent = Math.round(lbView.scale * 100) + '%';
   }
 
-  function applyLbZoom() {
-    lbCanvas.style.width = Math.round(lbCanvas.width * lbZoom) + 'px';
-    lbCanvas.style.height = Math.round(lbCanvas.height * lbZoom) + 'px';
+  // 适应窗口：等比缩到刚好放下并居中
+  function lbFit() {
+    if (!lbStage || !lbCanvas.width) return;
+    const sw = lbStage.clientWidth;
+    const sh = lbStage.clientHeight;
+    if (sw < 8 || sh < 8) {
+      requestAnimationFrame(lbFit); // 布局还没算完
+      return;
+    }
+    const fit = Math.min(sw / lbCanvas.width, sh / lbCanvas.height);
+    lbView.scale = Math.min(1, fit) || 1;
+    lbView.x = (sw - lbCanvas.width * lbView.scale) / 2;
+    lbView.y = (sh - lbCanvas.height * lbView.scale) / 2;
+    lbApply();
+  }
+
+  // 以某个屏幕点为锚缩放（滚轮/双击都走这里）
+  function lbZoomAt(factor, clientX, clientY) {
+    if (!lbStage) return;
+    const rect = lbStage.getBoundingClientRect();
+    const mx = (clientX === undefined ? rect.left + rect.width / 2 : clientX) - rect.left;
+    const my = (clientY === undefined ? rect.top + rect.height / 2 : clientY) - rect.top;
+    const next = Math.min(12, Math.max(0.05, lbView.scale * factor));
+    const k = next / lbView.scale;
+    lbView.x = mx - (mx - lbView.x) * k;
+    lbView.y = my - (my - lbView.y) * k;
+    lbView.scale = next;
+    lbApply();
   }
 
   async function drawLightbox() {
@@ -788,7 +810,7 @@ export function boot(opts = {}) {
     ctx.fillRect(0, 0, lbCanvas.width, lbCanvas.height);
     await p.page.render({ canvasContext: ctx, viewport: vp }).promise;
     lbNo.textContent = lbPage + ' / ' + stack.pages.length;
-    fitLbZoom();
+    lbFit();
     syncLbArrows();
   }
 
@@ -891,7 +913,7 @@ export function boot(opts = {}) {
     );
     ctx.restore();
     lbNo.textContent = (lbFigureIndex + 1) + '/' + lbFigures.length + ' · ' + labelOfKind(region);
-    fitLbZoom();
+    lbFit();
     syncLbArrows();
   }
 
@@ -902,42 +924,42 @@ export function boot(opts = {}) {
   }
 
   if (lb) {
-    // 滚轮缩放
+    // 滚轮：以光标为锚缩放
     lb.addEventListener('wheel', (ev) => {
       if (lb.hidden) return;
       ev.preventDefault();
-      const next = lbZoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12);
-      lbZoom = Math.min(8, Math.max(0.1, next));
-      applyLbZoom();
+      lbZoomAt(Math.exp(-ev.deltaY * 0.0018), ev.clientX, ev.clientY);
     }, { passive: false });
 
-    // 拖动平移
+    // 拖动平移（任意缩放级别都能拖）
     let pan = null;
-    lbCanvas.addEventListener('pointerdown', (ev) => {
-      pan = { x: ev.clientX, y: ev.clientY, left: lb.scrollLeft, top: lb.scrollTop };
-      lbCanvas.classList.add('is-panning');
-      if (lbCanvas.setPointerCapture) lbCanvas.setPointerCapture(ev.pointerId);
+    lbStage.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      pan = { x: ev.clientX, y: ev.clientY, ox: lbView.x, oy: lbView.y };
+      lbStage.classList.add('is-panning');
+      if (lbStage.setPointerCapture) lbStage.setPointerCapture(ev.pointerId);
     });
-    lbCanvas.addEventListener('pointermove', (ev) => {
+    lbStage.addEventListener('pointermove', (ev) => {
       if (!pan) return;
-      lb.scrollLeft = pan.left - (ev.clientX - pan.x);
-      lb.scrollTop = pan.top - (ev.clientY - pan.y);
+      lbView.x = pan.ox + (ev.clientX - pan.x);
+      lbView.y = pan.oy + (ev.clientY - pan.y);
+      lbApply();
     });
     const endPan = () => {
       pan = null;
-      lbCanvas.classList.remove('is-panning');
+      lbStage.classList.remove('is-panning');
     };
-    lbCanvas.addEventListener('pointerup', endPan);
-    lbCanvas.addEventListener('pointercancel', endPan);
+    lbStage.addEventListener('pointerup', endPan);
+    lbStage.addEventListener('pointercancel', endPan);
 
-    // 双击：在「适应窗口」和 100% 之间切
-    lbCanvas.addEventListener('dblclick', () => {
-      lbZoom = lbZoom > 1.01 ? 1 : Math.max(1, 1 / lbZoom);
-      applyLbZoom();
+    // 双击：100% ↔ 适应窗口
+    lbStage.addEventListener('dblclick', (ev) => {
+      if (Math.abs(lbView.scale - 1) < 0.01) lbFit();
+      else lbZoomAt(1 / lbView.scale, ev.clientX, ev.clientY);
     });
 
     lb.addEventListener('click', (ev) => {
-      if (ev.target === lb) closeLightbox();
+      if (ev.target === lb || ev.target === lbStage) closeLightbox();
     });
     document.addEventListener('keydown', (ev) => {
       if (lb.hidden) return;
@@ -948,16 +970,19 @@ export function boot(opts = {}) {
       }
       if (ev.key === 'ArrowLeft') lbStep(-1);
       else if (ev.key === 'ArrowRight') lbStep(1);
-      else if (ev.key === '+' || ev.key === '=') { lbZoom = Math.min(8, lbZoom * 1.15); applyLbZoom(); }
-      else if (ev.key === '-' || ev.key === '_') { lbZoom = Math.max(0.1, lbZoom / 1.15); applyLbZoom(); }
+      else if (ev.key === '+' || ev.key === '=') lbZoomAt(1.15);
+      else if (ev.key === '-' || ev.key === '_') lbZoomAt(1 / 1.15);
+      else if (ev.key === '0') lbFit();
       else return;
       ev.preventDefault();
     });
     document.getElementById('lb-prev').addEventListener('click', () => lbStep(-1));
     document.getElementById('lb-next').addEventListener('click', () => lbStep(1));
-    document.getElementById('lb-zoom-in').addEventListener('click', () => { lbZoom = Math.min(8, lbZoom * 1.2); applyLbZoom(); });
-    document.getElementById('lb-zoom-out').addEventListener('click', () => { lbZoom = Math.max(0.1, lbZoom / 1.2); applyLbZoom(); });
-    document.getElementById('lb-fit').addEventListener('click', () => fitLbZoom());
+    document.getElementById('lb-zoom-in').addEventListener('click', () => lbZoomAt(1.2));
+    document.getElementById('lb-zoom-out').addEventListener('click', () => lbZoomAt(1 / 1.2));
+    document.getElementById('lb-zoom').addEventListener('click', () => lbZoomAt(1 / lbView.scale));
+    document.getElementById('lb-fit').addEventListener('click', () => lbFit());
+    document.getElementById('lb-close').addEventListener('click', () => closeLightbox());
   }
 
   function goPage(no) {
@@ -1361,18 +1386,8 @@ export function boot(opts = {}) {
     colsBtn.innerHTML = ICONS.columns;
     sideHead.appendChild(colsBtn);
     colsBtn.addEventListener('click', () => {
-      if (layout.sideCols === 2) {
-        // 双列 → 单列，宽度不动
-        layout.sideCols = 1;
-      } else {
-        // 单列 → 双列；太窄就先撑到双列下限
-        const w = shell.panelLeft.getBoundingClientRect().width;
-        if (w < DOUBLE_MIN) {
-          layout.side = DOUBLE_MIN;
-          layout.leftCollapsed = false;
-        }
-        layout.sideCols = 2;
-      }
+      // 只切列数，绝不改左栏宽度
+      layout.sideCols = layout.sideCols === 2 ? 1 : 2;
       applyLayout();
       updateColsBtn();
       lastListSig = ''; // 列表结构变了，强制重建
@@ -1396,31 +1411,45 @@ export function boot(opts = {}) {
     colsBtn.title = double ? '切回单列' : '切到双列';
   }
 
-  const leftToggle = document.getElementById('toggle-left');
-  if (leftToggle) {
-    leftToggle.innerHTML = ICONS.sidebarLeft;
-    leftToggle.addEventListener('click', () => {
-      layout.leftCollapsed = !layout.leftCollapsed;
-      applyLayout();
-      saveLayout();
-      leftToggle.innerHTML = ICONS.sidebarLeft;
-      scheduleRefit();
-    });
+  // 折叠按钮：表头里一个，收起后在底角留一个同样的
+  function makeToggle(host, icon, isRight) {
+    if (!host) return null;
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-btn toggle-btn';
+    btn.innerHTML = icon;
+    btn.title = isRight ? '收起/展开右栏' : '收起/展开左栏';
+    host.appendChild(btn);
+    return btn;
   }
+
+  const leftRail = document.getElementById('rail-left');
+  const rightRail = document.getElementById('rail-right');
+  const leftToggle = makeToggle(sideHead, ICONS.sidebarLeft, false);
+  const rightToggle = makeToggle(document.getElementById('panel-head'), ICONS.sidebarRight, true);
+  if (leftRail) leftRail.innerHTML = ICONS.sidebarLeft;
+  if (rightRail) rightRail.innerHTML = ICONS.sidebarRight;
+
+  const flipLeft = () => {
+    layout.leftCollapsed = !layout.leftCollapsed;
+    applyLayout();
+    saveLayout();
+    scheduleRefit();
+  };
+  const flipRight = () => {
+    layout.rightCollapsed = !layout.rightCollapsed;
+    applyLayout();
+    saveLayout();
+    scheduleRefit();
+  };
+  if (leftToggle) leftToggle.addEventListener('click', flipLeft);
+  if (rightToggle) rightToggle.addEventListener('click', flipRight);
+  if (leftRail) leftRail.addEventListener('click', flipLeft);
+  if (rightRail) rightRail.addEventListener('click', flipRight);
 
   updateColsBtn && updateColsBtn();
 
-  const rightToggle = document.getElementById('toggle-right');
-  if (rightToggle) {
-    rightToggle.innerHTML = ICONS.sidebarRight;
-    rightToggle.addEventListener('click', () => {
-      layout.rightCollapsed = !layout.rightCollapsed;
-      applyLayout();
-      saveLayout();
-      rightToggle.innerHTML = ICONS.sidebarRight;
-      scheduleRefit();
-    });
-  }
+
 
   // 未捕获异常进底部横幅，不覆盖空状态，10 秒后自己消失
   if (typeof window !== 'undefined') {

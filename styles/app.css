@@ -699,8 +699,8 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .side-toggle:hover { background: var(--hover); color: var(--text); }
 .side-toggle.is-right { left: auto; right: 6px; }
 
-.sidebar.is-collapsed > *:not(.side-toggle),
-.panel.is-collapsed > *:not(.side-toggle) { display: none !important; }
+.sidebar.is-collapsed > *:not(.side-toggle):not(.rail-toggle),
+.panel.is-collapsed > *:not(.side-toggle):not(.rail-toggle) { display: none !important; }
 
 .sidebar.is-collapsed, .panel.is-collapsed { overflow: hidden; }
 .sidebar.is-collapsed .side-toggle, .panel.is-collapsed .side-toggle { left: 3px; bottom: 6px; }
@@ -938,3 +938,82 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 }
 
 .lightbox-bar .icon-btn.is-disabled { opacity: 0.35; pointer-events: none; }
+
+/* 侧栏折叠：图标放在表头，收起后留一个底角小按钮 */
+.side-head .side-title { flex: 1; min-width: 0; }
+.side-head .toggle-btn { flex: none; }
+
+.rail-toggle {
+  position: absolute;
+  left: 4px;
+  bottom: 6px;
+  z-index: 5;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-toggle:hover { background: var(--hover); color: var(--text); }
+.rail-toggle.is-right { left: auto; right: 4px; }
+.sidebar:not(.is-collapsed) .rail-toggle,
+.panel:not(.is-collapsed) .rail-toggle { display: none; }
+
+.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head { display: none; }
+.sidebar.is-collapsed .rail-toggle, .panel.is-collapsed .rail-toggle { display: flex; }
+
+/* ---------- 全屏查看器 ---------- */
+.lightbox-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 96vw;
+  max-height: 94vh;
+}
+
+.lightbox-stage {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  max-height: 86vh;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  touch-action: none;
+}
+
+.lightbox-stage.is-panning { cursor: grabbing; }
+
+.lightbox-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  will-change: transform;
+}
+
+.lightbox-bar .icon-btn { width: 32px; height: 30px; border-radius: 7px; background: rgba(255,255,255,0.14); color: #fff; font-size: 13px; }
+.lightbox-bar .icon-btn:hover { background: rgba(255,255,255,0.26); }
+.lightbox-bar .icon-btn.is-disabled { opacity: 0.35; pointer-events: none; }
+.lightbox-bar #lb-zoom { width: auto; min-width: 58px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.lightbox-bar #lb-fit, .lightbox-bar #lb-close { width: auto; padding: 0 10px; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .lightbox-bar .icon-btn { width: 30px; height: 28px; }
+  .lightbox-stage { max-height: 78vh; }
+}
+
+/* 查看器：给 stage 一个确定高度，否则 flex 里会塌成 0 */
+.lightbox-inner { height: 92vh; }
+.lightbox-stage { flex: 1 1 auto; min-height: 0; }
