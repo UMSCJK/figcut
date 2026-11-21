@@ -1099,3 +1099,112 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 :root[data-empty="1"] [data-role="redo"],
 :root[data-empty="1"] [data-role="settings"],
 :root[data-empty="1"] [data-role="export"] { display: none !important; }
+
+/* ---------- GNOME 顶栏 ---------- */
+.topbar { height: 47px; padding: 0 6px; gap: 5px; }
+.topbar .title-block { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; }
+.topbar .title { font-size: 11pt; font-weight: 700; line-height: 1.15; }
+.topbar .subtitle { font-size: 9pt; color: var(--text-3); line-height: 1.15; }
+
+.btn.menubtn { border: 1px solid var(--line-strong); background: var(--card); font-weight: 600; }
+.btn.pill { border-radius: 999px; padding: 0 16px; }
+
+.page-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--card);
+  font-variant-numeric: tabular-nums;
+}
+
+.pj-btn { width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--text-2); font-size: 13px; }
+.pj-btn:hover { background: var(--hover); color: var(--text); }
+.pj-label { font-size: 10pt; padding: 0 4px; color: var(--text); }
+
+/* 主菜单弹层 */
+.gtk-menu {
+  position: fixed;
+  z-index: 90;
+  width: 250px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow-2);
+}
+
+.gtk-menu[hidden] { display: none; }
+
+.theme-row { display: flex; justify-content: center; gap: 14px; padding: 8px 0 10px; }
+
+.sw {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,.18);
+  background: #fff;
+  padding: 0;
+}
+
+.sw-follow { background: linear-gradient(135deg, #fff 0 50%, #232323 50% 100%); }
+.sw-light { background: #fff; }
+.sw-dark { background: #232323; }
+.sw.is-on { box-shadow: 0 0 0 2px var(--accent); }
+
+.sw-badge {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  line-height: 16px;
+  text-align: center;
+  border: 2px solid var(--card);
+  display: none;
+}
+
+.sw.is-on .sw-badge { display: block; }
+
+.zoom-row { display: flex; align-items: center; gap: 12px; padding: 6px 18px 10px; }
+.z-btn { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--hover); color: var(--text); font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.z-btn:hover { background: var(--active); }
+.z-pill { flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; font-size: 10.5pt; font-variant-numeric: tabular-nums; }
+.z-pill:hover { background: var(--hover); }
+
+.menu-sep { height: 1px; background: var(--line); margin: 6px 10px; }
+
+.menu-row { height: 34px; display: flex; align-items: center; padding: 0 10px; border-radius: 7px; font-size: 10.5pt; }
+.menu-row:hover { background: var(--hover); }
+.menu-name { flex: 1; }
+.menu-value { color: var(--text-3); }
+.menu-input {
+  width: 74px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 10pt;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 按 Adwaita 微调弹层尺寸 */
+.gtk-menu { width: 244px; padding: 6px; }
+.theme-row { gap: 12px; padding: 6px 0 10px; }
+.sw { width: 44px; height: 44px; }
+.menu-sep { margin: 6px 4px; }
+.menu-row { height: 34px; }
+.z-btn { width: 34px; height: 34px; }
+.z-pill { height: 34px; }
