@@ -575,7 +575,7 @@ export function boot(opts = {}) {
   menu.appendChild(menuRow('奇数页在左', 'O', null, () => { stack.applyLayout({ oddLeft: !stack.view.oddLeft }); closeMenu(); }).el);
   menu.appendChild(sepLine());
   menu.appendChild(menuRow('适应页宽', 'S', null, () => { setFit(zoom, 'width', fitDims()); closeMenu(); }).el);
-  menu.appendChild(menuRow('适应页面', 'F', null, () => { setFit(zoom, 'page', fitDims()); closeMenu(); }).el);
+  menu.appendChild(menuRow('适应页面', 'F', null, () => { doFitPage(); closeMenu(); }).el);
   menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
   document.body.appendChild(menu);
@@ -630,6 +630,14 @@ export function boot(opts = {}) {
       sw.classList.toggle('is-on', active);
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';
+  }
+
+  let fitPageMode = false;
+
+  function doFitPage() {
+    fitPageMode = true;
+    stack.applyLayout({ continuous: false });
+    setFit(zoom, 'page', fitDims());
   }
 
   function stepZoomBy(dir) {
@@ -1298,6 +1306,10 @@ export function boot(opts = {}) {
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => {
+    if (fitPageMode && zoom.mode !== 'page') {
+      fitPageMode = false;
+      stack.applyLayout({ continuous: true });
+    }
     stack.setVisualScale(zoom.scale);
     stack.scheduleZoom();
     // 缩放停稳后把文本层重排，保证透明文字始终贴在字上

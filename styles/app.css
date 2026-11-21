@@ -1374,3 +1374,37 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .gtk-menu { min-width: 196px; max-width: 240px; width: auto; }
 .menu-input { width: 56px; }
 .theme-row { margin: 8px 6px; gap: 10px; }
+
+/* 打开按钮：两种主题下都无痕 */
+.topbar .btn.menubtn,
+:root[data-ui="dark"] .topbar .btn.menubtn {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.topbar .btn.menubtn:hover,
+:root[data-ui="dark"] .topbar .btn.menubtn:hover { background: var(--hover); }
+
+/* 导出：圆角矩形，不是胶囊 */
+.btn.pill { border-radius: 7px; padding: 0 14px; }
+
+/* 工具组缩小：Adw 视图切换器尺度 */
+.tool-group { padding: 2px; gap: 1px; border-radius: 7px; }
+.tool-group .icon-btn { width: 26px; height: 26px; border-radius: 5px; }
+.tool-group .icon-btn svg { width: 15px; height: 15px; }
+
+/* 全屏查看器铺满整个窗口 */
+.lightbox { inset: 0; }
+.lightbox-inner { width: 100vw; height: 100vh; max-width: none; max-height: none; border-radius: 0; gap: 0; }
+.lightbox-stage { height: 100vh; max-height: none; border-radius: 0; flex: 1 1 auto; }
+.lightbox-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+}
