@@ -1504,3 +1504,20 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 跟随系统的圆：白底 + 左下角黑楔形 */
 .sw-follow { background-image: linear-gradient(to bottom left, #fff 49.99%, #202020 50.01%); }
+
+/* SVG 圆点：按钮只负责命中区域 */
+.sw {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sw svg { display: block; }
+.sw.is-on { box-shadow: none; }

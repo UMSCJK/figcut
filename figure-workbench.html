@@ -1576,6 +1576,23 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 跟随系统的圆：白底 + 左下角黑楔形 */
 .sw-follow { background-image: linear-gradient(to bottom left, #fff 49.99%, #202020 50.01%); }
 
+/* SVG 圆点：按钮只负责命中区域 */
+.sw {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sw svg { display: block; }
+.sw.is-on { box-shadow: none; }
+
 </style>
 </head>
 <body>
@@ -5642,21 +5659,90 @@ function boot(opts = {}) {
   ];
   const themeRow = doc.createElement('div');
   themeRow.className = 'theme-row';
+
+  // 用 SVG 画，几何完全可控（照 editor-theme-selector.ui 的 44px 圆 / inset 2px 环 / 右下 12px 勾）
+  let swatchSeq = 0;
+
+  function swatchSvg(kind, on) {
+    const NS = 'http://www.w3.org/2000/svg';
+    swatchSeq += 1;
+    const id = 'swclip' + swatchSeq;
+    const svg = doc.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 44 44');
+    svg.setAttribute('width', '44');
+    svg.setAttribute('height', '44');
+
+    const defs = doc.createElementNS(NS, 'defs');
+    const clip = doc.createElementNS(NS, 'clipPath');
+    clip.setAttribute('id', id);
+    const clipCircle = doc.createElementNS(NS, 'circle');
+    clipCircle.setAttribute('cx', '22');
+    clipCircle.setAttribute('cy', '22');
+    clipCircle.setAttribute('r', '20');
+    clip.appendChild(clipCircle);
+    defs.appendChild(clip);
+    svg.appendChild(defs);
+
+    const disc = doc.createElementNS(NS, 'circle');
+    disc.setAttribute('cx', '22');
+    disc.setAttribute('cy', '22');
+    disc.setAttribute('r', '20');
+    disc.setAttribute('fill', kind === 'dark' ? '#202020' : '#ffffff');
+    svg.appendChild(disc);
+
+    // 跟随系统：左下角半圆涂黑（对角从左上到右下）
+    if (kind === 'follow') {
+      const g = doc.createElementNS(NS, 'g');
+      g.setAttribute('clip-path', 'url(#' + id + ')');
+      const poly = doc.createElementNS(NS, 'polygon');
+      poly.setAttribute('points', '0,0 44,44 0,44');
+      poly.setAttribute('fill', '#202020');
+      g.appendChild(poly);
+      svg.appendChild(g);
+    }
+
+    const ring = doc.createElementNS(NS, 'circle');
+    ring.setAttribute('cx', '22');
+    ring.setAttribute('cy', '22');
+    ring.setAttribute('r', '20');
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', on ? 'var(--accent)' : 'var(--line-strong)');
+    ring.setAttribute('stroke-width', on ? '2' : '1');
+    svg.appendChild(ring);
+
+    if (on) {
+      const badge = doc.createElementNS(NS, 'circle');
+      badge.setAttribute('cx', '33.5');
+      badge.setAttribute('cy', '32.5');
+      badge.setAttribute('r', '6.5');
+      badge.setAttribute('fill', 'var(--accent)');
+      badge.setAttribute('stroke', 'var(--card)');
+      badge.setAttribute('stroke-width', '1.5');
+      svg.appendChild(badge);
+      const tick = doc.createElementNS(NS, 'path');
+      tick.setAttribute('d', 'M30.6 32.6l2 2 3.6-3.9');
+      tick.setAttribute('fill', 'none');
+      tick.setAttribute('stroke', '#fff');
+      tick.setAttribute('stroke-width', '1.7');
+      tick.setAttribute('stroke-linecap', 'round');
+      tick.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(tick);
+    }
+    return svg;
+  }
+
   const swatches = APPEARANCES.map((item) => {
     const sw = doc.createElement('button');
     sw.type = 'button';
-    sw.className = 'sw sw-' + item.cls;
+    sw.className = 'sw';
     sw.title = item.title;
     sw.setAttribute('aria-label', item.title);
-    const badge = doc.createElement('span');
-    badge.className = 'sw-badge';
-    badge.textContent = '✓';
-    sw.appendChild(badge);
+    sw.appendChild(swatchSvg(item.cls, false));
     sw.addEventListener('click', () => {
       theme.ui = item.ui;
       theme.pdf = item.pdf;
       applyColors();
-      syncMenu(); // 立刻更新高亮，否则要等下次打开菜单
+      syncMenu(); // 立刻更新高亮
     });
     themeRow.appendChild(sw);
     return { sw, item };
@@ -5803,11 +5889,12 @@ function boot(opts = {}) {
     const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
     for (const { sw, item } of swatches) {
-      // 白 / 混合 / 黑 三态各自对应一组 (ui, pdf)
       const active = item.ui === 'system'
         ? (theme.ui || 'system') === 'system'
         : (theme.ui || 'system') === item.ui;
       sw.classList.toggle('is-on', active);
+      sw.textContent = '';
+      sw.appendChild(swatchSvg(item.cls, active));
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';
     if (rowContinuous) rowContinuous.el.classList.toggle('is-off', !stack.view.continuous);
