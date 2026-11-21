@@ -206,7 +206,16 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 }
 .splitter:hover::after, .splitter.is-dragging::after { background: var(--accent); opacity: 0.5; }
 
-.side-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--sidebar);
+}
 .side-head .icon-btn { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--text-3); }
 .side-head .icon-btn:hover { background: var(--hover); color: var(--text); }
 .side-head .icon-btn:disabled { opacity: 0.35; cursor: default; }
@@ -879,6 +888,8 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .lightbox-bar { display: flex; align-items: center; gap: 10px; color: #fff; }
 .lightbox-bar .icon-btn { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; }
 .lightbox-no { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+.lightbox-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.3); margin: 0 4px; }
+.lightbox-bar .icon-btn#lb-fit { width: auto; padding: 0 8px; font-size: 12px; }
 
 /* 配色连体按钮组 */
 .seg {
@@ -997,6 +1008,8 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   .seg { display: none; }
 }
 
+.lightbox-bar .icon-btn.is-disabled { opacity: 0.35; pointer-events: none; }
+
 </style>
 </head>
 <body>
@@ -1009,7 +1022,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   <main class="body" id="body">
     <aside class="sidebar" id="panel-left">
       <div class="side-head" id="side-head">页面</div>
-      <button type="button" class="side-toggle" id="toggle-left" title="收起/展开左栏">‹</button>
+      <button type="button" class="side-toggle" id="toggle-left" title="收起/展开左栏"></button>
     </aside>
     <div class="splitter" id="split-left" title="拖动调整宽度，双击折叠"></div>
     <div class="canvas" id="canvas">
@@ -1027,11 +1040,15 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
           <button type="button" class="icon-btn" id="lb-prev" title="上一页">‹</button>
           <span class="lightbox-no" id="lb-no">1</span>
           <button type="button" class="icon-btn" id="lb-next" title="下一页">›</button>
+          <span class="lightbox-sep"></span>
+          <button type="button" class="icon-btn" id="lb-zoom-out" title="缩小">−</button>
+          <button type="button" class="icon-btn" id="lb-fit" title="适应窗口">适应</button>
+          <button type="button" class="icon-btn" id="lb-zoom-in" title="放大">+</button>
         </div>
       </div>
     </div>
     <aside class="panel" id="panel-right">
-      <button type="button" class="side-toggle is-right" id="toggle-right" title="收起/展开右栏">›</button>
+      <button type="button" class="side-toggle is-right" id="toggle-right" title="收起/展开右栏"></button>
     </aside>
   </main>
   <div class="banner" id="banner" hidden></div>
@@ -1450,6 +1467,8 @@ const ICONS = {
   minus: wrap('<path d="M3.6 8h8.8"/>'),
   plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
   grid: wrap('<rect x="2.6" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="0.8"/>'),
+  sidebarLeft: wrap('<rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="4.2" y="5" width="3" height="6" rx="0.8" fill="currentColor" stroke="none"/>'),
+  sidebarRight: wrap('<rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8.8" y="5" width="3" height="6" rx="0.8" fill="currentColor" stroke="none"/>'),
   columns: wrap('<rect x="2.4" y="2.8" width="4.4" height="10.4" rx="1"/><rect x="9.2" y="2.8" width="4.4" height="10.4" rx="1"/>'),
   fitWidth: wrap('<rect x="2.4" y="3.2" width="4.2" height="9.6" rx="0.6"/><path d="M9 8h4.4M11.6 5.6L13.8 8l-2.2 2.4"/>'),
   fitPage: wrap('<rect x="4" y="2.6" width="8" height="10.8" rx="0.8"/><path d="M6 5.4h4M6 8h4M6 10.6h4"/>'),
@@ -5029,9 +5048,11 @@ function boot(opts = {}) {
     remeasureAll();
   });
 
-  addButton(shell, 'right', '设置', () => {
+  let appearanceAnchor = null;
+  const settingsBtn = addButton(shell, 'right', '设置', () => {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
+  appearanceAnchor = settingsBtn;
 
   // 配色：三个连体按钮（浅UI浅PDF / 深UI浅PDF / 深UI深PDF）
   const APPEARANCES = [
@@ -5057,7 +5078,12 @@ function boot(opts = {}) {
     appearanceGroup.appendChild(btn);
     return { btn, item };
   });
-  shell.right.insertBefore(appearanceGroup, settingsBox);
+  // 配色组放在设置按钮右边
+  if (appearanceAnchor && appearanceAnchor.nextSibling) {
+    shell.right.insertBefore(appearanceGroup, appearanceAnchor.nextSibling);
+  } else {
+    shell.right.appendChild(appearanceGroup);
+  }
 
   function syncColorButtons() {
     const ui = resolvedUi(theme, prefersDark());
@@ -5263,6 +5289,8 @@ function boot(opts = {}) {
   let lbPage = 1;
   let lbMode = 'page'; // 'page' = PDF 页预览，'figure' = 单个 figure 预览
   let lbZoom = 1;
+  let lbFigures = [];
+  let lbFigureIndex = 0;
 
   // 让大图先适配窗口，之后滚轮可缩放、按住拖动平移
   function fitLbZoom() {
@@ -5295,6 +5323,33 @@ function boot(opts = {}) {
     await p.page.render({ canvasContext: ctx, viewport: vp }).promise;
     lbNo.textContent = lbPage + ' / ' + stack.pages.length;
     fitLbZoom();
+    syncLbArrows();
+  }
+
+  function syncLbArrows() {
+    const prev = document.getElementById('lb-prev');
+    const next = document.getElementById('lb-next');
+    if (!prev || !next) return;
+    const total = lbMode === 'figure' ? lbFigures.length : stack.pages.length;
+    const idx = lbMode === 'figure' ? lbFigureIndex + 1 : lbPage;
+    const atStart = idx <= 1;
+    const atEnd = idx >= total;
+    prev.classList.toggle('is-disabled', atStart);
+    next.classList.toggle('is-disabled', atEnd);
+  }
+
+  function lbStep(dir) {
+    if (lbMode === 'figure') {
+      const next = lbFigureIndex + dir;
+      if (next < 0 || next >= lbFigures.length) return;
+      lbFigureIndex = next;
+      openFigureLightbox(lbFigures[next]);
+      return;
+    }
+    const next = lbPage + dir;
+    if (next < 1 || next > stack.pages.length) return; // 到头就不重绘，避免闪
+    lbPage = next;
+    drawLightbox();
   }
 
   function openLightbox(no) {
@@ -5303,14 +5358,9 @@ function boot(opts = {}) {
     lbPage = no;
     lb.hidden = false;
     const bar = document.querySelector('.lightbox-bar');
-    if (bar) {
-      bar.style.display = '';
-      const prev = document.getElementById('lb-prev');
-      const next = document.getElementById('lb-next');
-      if (prev) prev.style.display = '';
-      if (next) next.style.display = '';
-    }
+    if (bar) bar.style.display = '';
     drawLightbox();
+    syncLbArrows();
   }
 
   // 右栏某个 figure 的全屏预览：按导出框裁好、按多边形蒙版涂白
@@ -5324,14 +5374,14 @@ function boot(opts = {}) {
     }
     lbMode = 'figure';
     lb.hidden = false;
+    // 单图模式也能在 figure 之间翻
+    lbFigures = ed.regions
+      .slice()
+      .sort((a, b) => a.page - b.page || (a.order || 0) - (b.order || 0));
+    const idx = lbFigures.findIndex((r) => r.id === region.id);
+    lbFigureIndex = idx >= 0 ? idx : 0;
     const bar = document.querySelector('.lightbox-bar');
-    if (bar) {
-      bar.style.display = '';
-      const prev = document.getElementById('lb-prev');
-      const next = document.getElementById('lb-next');
-      if (prev) prev.style.display = 'none';
-      if (next) next.style.display = 'none';
-    }
+    if (bar) bar.style.display = '';
 
     // 整页渲染到离屏画布（限制总像素），再裁出这块并放大到 ~1100px
     const vp1 = p.page.getViewport({ scale: 1 });
@@ -5374,8 +5424,9 @@ function boot(opts = {}) {
       0, 0, w, h
     );
     ctx.restore();
-    lbNo.textContent = labelOfKind(region);
+    lbNo.textContent = (lbFigureIndex + 1) + '/' + lbFigures.length + ' · ' + labelOfKind(region);
     fitLbZoom();
+    syncLbArrows();
   }
 
 
@@ -5429,15 +5480,18 @@ function boot(opts = {}) {
         ev.preventDefault();
         return;
       }
-      // 单图预览时不翻 PDF 页（不然看着图跳到别的页去了）
-      if (lbMode !== 'page') return;
-      if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
-      else if (ev.key === 'ArrowRight') { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); }
+      if (ev.key === 'ArrowLeft') lbStep(-1);
+      else if (ev.key === 'ArrowRight') lbStep(1);
+      else if (ev.key === '+' || ev.key === '=') { lbZoom = Math.min(8, lbZoom * 1.15); applyLbZoom(); }
+      else if (ev.key === '-' || ev.key === '_') { lbZoom = Math.max(0.1, lbZoom / 1.15); applyLbZoom(); }
       else return;
       ev.preventDefault();
     });
-    document.getElementById('lb-prev').addEventListener('click', () => { lbPage = Math.max(1, lbPage - 1); drawLightbox(); });
-    document.getElementById('lb-next').addEventListener('click', () => { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); });
+    document.getElementById('lb-prev').addEventListener('click', () => lbStep(-1));
+    document.getElementById('lb-next').addEventListener('click', () => lbStep(1));
+    document.getElementById('lb-zoom-in').addEventListener('click', () => { lbZoom = Math.min(8, lbZoom * 1.2); applyLbZoom(); });
+    document.getElementById('lb-zoom-out').addEventListener('click', () => { lbZoom = Math.max(0.1, lbZoom / 1.2); applyLbZoom(); });
+    document.getElementById('lb-fit').addEventListener('click', () => fitLbZoom());
   }
 
   function goPage(no) {
@@ -5878,12 +5932,12 @@ function boot(opts = {}) {
 
   const leftToggle = document.getElementById('toggle-left');
   if (leftToggle) {
-    leftToggle.textContent = '‹';
+    leftToggle.innerHTML = ICONS.sidebarLeft;
     leftToggle.addEventListener('click', () => {
       layout.leftCollapsed = !layout.leftCollapsed;
       applyLayout();
       saveLayout();
-      leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
+      leftToggle.innerHTML = ICONS.sidebarLeft;
       scheduleRefit();
     });
   }
@@ -5892,12 +5946,12 @@ function boot(opts = {}) {
 
   const rightToggle = document.getElementById('toggle-right');
   if (rightToggle) {
-    rightToggle.textContent = '›';
+    rightToggle.innerHTML = ICONS.sidebarRight;
     rightToggle.addEventListener('click', () => {
       layout.rightCollapsed = !layout.rightCollapsed;
       applyLayout();
       saveLayout();
-      rightToggle.textContent = layout.rightCollapsed ? '‹' : '›';
+      rightToggle.innerHTML = ICONS.sidebarRight;
       scheduleRefit();
     });
   }

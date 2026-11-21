@@ -514,9 +514,11 @@ export function boot(opts = {}) {
     remeasureAll();
   });
 
-  addButton(shell, 'right', '设置', () => {
+  let appearanceAnchor = null;
+  const settingsBtn = addButton(shell, 'right', '设置', () => {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
+  appearanceAnchor = settingsBtn;
 
   // 配色：三个连体按钮（浅UI浅PDF / 深UI浅PDF / 深UI深PDF）
   const APPEARANCES = [
@@ -542,7 +544,12 @@ export function boot(opts = {}) {
     appearanceGroup.appendChild(btn);
     return { btn, item };
   });
-  shell.right.insertBefore(appearanceGroup, settingsBox);
+  // 配色组放在设置按钮右边
+  if (appearanceAnchor && appearanceAnchor.nextSibling) {
+    shell.right.insertBefore(appearanceGroup, appearanceAnchor.nextSibling);
+  } else {
+    shell.right.appendChild(appearanceGroup);
+  }
 
   function syncColorButtons() {
     const ui = resolvedUi(theme, prefersDark());
@@ -748,6 +755,8 @@ export function boot(opts = {}) {
   let lbPage = 1;
   let lbMode = 'page'; // 'page' = PDF 页预览，'figure' = 单个 figure 预览
   let lbZoom = 1;
+  let lbFigures = [];
+  let lbFigureIndex = 0;
 
   // 让大图先适配窗口，之后滚轮可缩放、按住拖动平移
   function fitLbZoom() {
@@ -780,6 +789,33 @@ export function boot(opts = {}) {
     await p.page.render({ canvasContext: ctx, viewport: vp }).promise;
     lbNo.textContent = lbPage + ' / ' + stack.pages.length;
     fitLbZoom();
+    syncLbArrows();
+  }
+
+  function syncLbArrows() {
+    const prev = document.getElementById('lb-prev');
+    const next = document.getElementById('lb-next');
+    if (!prev || !next) return;
+    const total = lbMode === 'figure' ? lbFigures.length : stack.pages.length;
+    const idx = lbMode === 'figure' ? lbFigureIndex + 1 : lbPage;
+    const atStart = idx <= 1;
+    const atEnd = idx >= total;
+    prev.classList.toggle('is-disabled', atStart);
+    next.classList.toggle('is-disabled', atEnd);
+  }
+
+  function lbStep(dir) {
+    if (lbMode === 'figure') {
+      const next = lbFigureIndex + dir;
+      if (next < 0 || next >= lbFigures.length) return;
+      lbFigureIndex = next;
+      openFigureLightbox(lbFigures[next]);
+      return;
+    }
+    const next = lbPage + dir;
+    if (next < 1 || next > stack.pages.length) return; // 到头就不重绘，避免闪
+    lbPage = next;
+    drawLightbox();
   }
 
   function openLightbox(no) {
@@ -788,14 +824,9 @@ export function boot(opts = {}) {
     lbPage = no;
     lb.hidden = false;
     const bar = document.querySelector('.lightbox-bar');
-    if (bar) {
-      bar.style.display = '';
-      const prev = document.getElementById('lb-prev');
-      const next = document.getElementById('lb-next');
-      if (prev) prev.style.display = '';
-      if (next) next.style.display = '';
-    }
+    if (bar) bar.style.display = '';
     drawLightbox();
+    syncLbArrows();
   }
 
   // 右栏某个 figure 的全屏预览：按导出框裁好、按多边形蒙版涂白
@@ -809,14 +840,14 @@ export function boot(opts = {}) {
     }
     lbMode = 'figure';
     lb.hidden = false;
+    // 单图模式也能在 figure 之间翻
+    lbFigures = ed.regions
+      .slice()
+      .sort((a, b) => a.page - b.page || (a.order || 0) - (b.order || 0));
+    const idx = lbFigures.findIndex((r) => r.id === region.id);
+    lbFigureIndex = idx >= 0 ? idx : 0;
     const bar = document.querySelector('.lightbox-bar');
-    if (bar) {
-      bar.style.display = '';
-      const prev = document.getElementById('lb-prev');
-      const next = document.getElementById('lb-next');
-      if (prev) prev.style.display = 'none';
-      if (next) next.style.display = 'none';
-    }
+    if (bar) bar.style.display = '';
 
     // 整页渲染到离屏画布（限制总像素），再裁出这块并放大到 ~1100px
     const vp1 = p.page.getViewport({ scale: 1 });
@@ -859,8 +890,9 @@ export function boot(opts = {}) {
       0, 0, w, h
     );
     ctx.restore();
-    lbNo.textContent = labelOfKind(region);
+    lbNo.textContent = (lbFigureIndex + 1) + '/' + lbFigures.length + ' · ' + labelOfKind(region);
     fitLbZoom();
+    syncLbArrows();
   }
 
 
@@ -914,15 +946,18 @@ export function boot(opts = {}) {
         ev.preventDefault();
         return;
       }
-      // 单图预览时不翻 PDF 页（不然看着图跳到别的页去了）
-      if (lbMode !== 'page') return;
-      if (ev.key === 'ArrowLeft') { lbPage = Math.max(1, lbPage - 1); drawLightbox(); }
-      else if (ev.key === 'ArrowRight') { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); }
+      if (ev.key === 'ArrowLeft') lbStep(-1);
+      else if (ev.key === 'ArrowRight') lbStep(1);
+      else if (ev.key === '+' || ev.key === '=') { lbZoom = Math.min(8, lbZoom * 1.15); applyLbZoom(); }
+      else if (ev.key === '-' || ev.key === '_') { lbZoom = Math.max(0.1, lbZoom / 1.15); applyLbZoom(); }
       else return;
       ev.preventDefault();
     });
-    document.getElementById('lb-prev').addEventListener('click', () => { lbPage = Math.max(1, lbPage - 1); drawLightbox(); });
-    document.getElementById('lb-next').addEventListener('click', () => { lbPage = Math.min(stack.pages.length, lbPage + 1); drawLightbox(); });
+    document.getElementById('lb-prev').addEventListener('click', () => lbStep(-1));
+    document.getElementById('lb-next').addEventListener('click', () => lbStep(1));
+    document.getElementById('lb-zoom-in').addEventListener('click', () => { lbZoom = Math.min(8, lbZoom * 1.2); applyLbZoom(); });
+    document.getElementById('lb-zoom-out').addEventListener('click', () => { lbZoom = Math.max(0.1, lbZoom / 1.2); applyLbZoom(); });
+    document.getElementById('lb-fit').addEventListener('click', () => fitLbZoom());
   }
 
   function goPage(no) {
@@ -1363,12 +1398,12 @@ export function boot(opts = {}) {
 
   const leftToggle = document.getElementById('toggle-left');
   if (leftToggle) {
-    leftToggle.textContent = '‹';
+    leftToggle.innerHTML = ICONS.sidebarLeft;
     leftToggle.addEventListener('click', () => {
       layout.leftCollapsed = !layout.leftCollapsed;
       applyLayout();
       saveLayout();
-      leftToggle.textContent = layout.leftCollapsed ? '›' : '‹';
+      leftToggle.innerHTML = ICONS.sidebarLeft;
       scheduleRefit();
     });
   }
@@ -1377,12 +1412,12 @@ export function boot(opts = {}) {
 
   const rightToggle = document.getElementById('toggle-right');
   if (rightToggle) {
-    rightToggle.textContent = '›';
+    rightToggle.innerHTML = ICONS.sidebarRight;
     rightToggle.addEventListener('click', () => {
       layout.rightCollapsed = !layout.rightCollapsed;
       applyLayout();
       saveLayout();
-      rightToggle.textContent = layout.rightCollapsed ? '‹' : '›';
+      rightToggle.innerHTML = ICONS.sidebarRight;
       scheduleRefit();
     });
   }

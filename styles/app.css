@@ -135,7 +135,16 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 }
 .splitter:hover::after, .splitter.is-dragging::after { background: var(--accent); opacity: 0.5; }
 
-.side-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--sidebar);
+}
 .side-head .icon-btn { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--text-3); }
 .side-head .icon-btn:hover { background: var(--hover); color: var(--text); }
 .side-head .icon-btn:disabled { opacity: 0.35; cursor: default; }
@@ -808,6 +817,8 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .lightbox-bar { display: flex; align-items: center; gap: 10px; color: #fff; }
 .lightbox-bar .icon-btn { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; }
 .lightbox-no { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+.lightbox-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.3); margin: 0 4px; }
+.lightbox-bar .icon-btn#lb-fit { width: auto; padding: 0 8px; font-size: 12px; }
 
 /* 配色连体按钮组 */
 .seg {
@@ -925,3 +936,5 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   .topbar .cluster { gap: 2px; }
   .seg { display: none; }
 }
+
+.lightbox-bar .icon-btn.is-disabled { opacity: 0.35; pointer-events: none; }
