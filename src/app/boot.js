@@ -575,9 +575,12 @@ export function boot(opts = {}) {
   menu.appendChild(marginRow.el);
   menu.appendChild(sepLine());
 
-  menu.appendChild(menuRow('连续滚动', 'C', null, () => { stack.applyLayout({ continuous: !stack.view.continuous }); closeMenu(); }).el);
-  menu.appendChild(menuRow('双页模式', 'D', null, () => { stack.applyLayout({ dual: !stack.view.dual }); closeMenu(); }).el);
-  menu.appendChild(menuRow('奇数页在左', 'O', null, () => { stack.applyLayout({ oddLeft: !stack.view.oddLeft }); closeMenu(); }).el);
+  const rowContinuous = menuRow('连续滚动', 'C', null, () => { setContinuous(!stack.view.continuous); closeMenu(); });
+  const rowDual = menuRow('双页模式', 'D', null, () => { setDual(!stack.view.dual); closeMenu(); });
+  const rowOdd = menuRow('奇数页在左', 'O', null, () => { if (!stack.view.dual) return; setOddLeft(!stack.view.oddLeft); closeMenu(); });
+  menu.appendChild(rowContinuous.el);
+  menu.appendChild(rowDual.el);
+  menu.appendChild(rowOdd.el);
   menu.appendChild(sepLine());
   menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
@@ -646,6 +649,23 @@ export function boot(opts = {}) {
     return { el, input };
   }
 
+  function setContinuous(next) {
+    stack.applyLayout({ continuous: !!next });
+    syncMenu();
+  }
+
+  function setDual(next) {
+    const on = !!next;
+    stack.applyLayout({ dual: on, oddLeft: on ? stack.view.oddLeft : false });
+    syncMenu();
+  }
+
+  function setOddLeft(next) {
+    if (!stack.view.dual) return;
+    stack.applyLayout({ oddLeft: !!next });
+    syncMenu();
+  }
+
   function syncMenu() {
     const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
@@ -655,6 +675,9 @@ export function boot(opts = {}) {
       sw.classList.toggle('is-on', active);
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';
+    if (rowContinuous) rowContinuous.el.classList.toggle('is-off', !stack.view.continuous);
+    if (rowDual) rowDual.el.classList.toggle('is-off', !stack.view.dual);
+    if (rowOdd) rowOdd.el.classList.toggle('is-off', !stack.view.dual);
   }
 
   let fitPageMode = false;
@@ -662,19 +685,10 @@ export function boot(opts = {}) {
   let dualBeforeFitPage = null;
 
   function doFitPage() {
-    // 适应整页 = 单页撑满高度（暂存原来的双页设置，离开时恢复）
-    if (!fitPageMode) dualBeforeFitPage = stack.view.dual;
     fitPageMode = true;
-    stack.applyLayout({ dual: false });
+    stack.root.classList.remove('is-fitpage');
     stack.root.style.removeProperty('--fit-extra');
-    stack.root.classList.add('is-fitpage'); // 缩紧上下内边距，页面才能占满高度
     setFit(zoom, 'page', fitDims());
-    // 内边距变了，把当前页对齐到顶部
-    requestAnimationFrame(() => {
-      const cur = stack.root.querySelector('.page-row.is-current');
-      if (!cur) return;
-      stack.root.scrollTop = Math.max(0, cur.offsetTop - 8);
-    });
   }
 
   function doFitWidth() {
@@ -1208,9 +1222,9 @@ export function boot(opts = {}) {
         render();
       }
     },
-    'view.continuous': () => stack.applyLayout({ continuous: !stack.view.continuous }),
-    'view.dual': () => stack.applyLayout({ dual: !stack.view.dual }),
-    'view.oddLeft': () => stack.applyLayout({ oddLeft: !stack.view.oddLeft }),
+    'view.continuous': () => setContinuous(!stack.view.continuous),
+    'view.dual': () => setDual(!stack.view.dual),
+    'view.oddLeft': () => setOddLeft(!stack.view.oddLeft),
     'view.invert': () => {
       theme.pdf = isInverted(theme, prefersDark()) ? 'normal' : 'invert';
       applyColors();
@@ -1249,8 +1263,19 @@ export function boot(opts = {}) {
     root.scrollTop = next.y;
   }
 
+  let pageWheelAt = 0;
   shell.canvas.addEventListener('wheel', (ev) => {
-    if (!(ev.ctrlKey || ev.metaKey) || state !== 'ready') return;
+    if (state !== 'ready') return;
+    // 连续滚动关掉时没有可滚的内容，滚轮改成翻页
+    if (!ev.ctrlKey && !ev.metaKey && !stack.view.continuous) {
+      ev.preventDefault();
+      const now = Date.now();
+      if (Math.abs(ev.deltaY) < 8 || now - pageWheelAt < 260) return;
+      pageWheelAt = now;
+      goPage(ed.page + (ev.deltaY > 0 ? 1 : -1));
+      return;
+    }
+    if (!(ev.ctrlKey || ev.metaKey)) return;
     ev.preventDefault();
     const root = stack.root;
     const box = root.getBoundingClientRect();
@@ -1265,6 +1290,8 @@ export function boot(opts = {}) {
     const rects = stack.visibleRects();
     const viewportTop = shell.canvas.getBoundingClientRect().top + 8;
     stack.scheduleZoom(); // 滚到的新页需要补渲染
+    // 连续滚动关掉时，页由按钮/滚轮决定，别让滚动位置再改一次
+    if (!stack.view.continuous) return;
     const no = pageAtScroll(rects, viewportTop);
     if (no !== ed.page) {
       ed.page = no;
@@ -1368,9 +1395,6 @@ export function boot(opts = {}) {
   subscribe(zoom, () => {
     if (fitPageMode && zoom.mode !== 'page') {
       fitPageMode = false;
-      stack.root.classList.remove('is-fitpage');
-      if (dualBeforeFitPage !== null) stack.applyLayout({ dual: dualBeforeFitPage });
-      dualBeforeFitPage = null;
     }
     stack.setVisualScale(zoom.scale);
     stack.scheduleZoom();

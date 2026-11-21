@@ -1458,3 +1458,13 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 适应整页：上下内边距收到 8px，页高才能贴满视口 */
 .pages.is-fitpage { padding-top: 8px; padding-bottom: 8px; }
+
+/* 顶栏按钮文字居中 + 字号统一 */
+.topbar .btn { justify-content: center; font-size: 10.5pt; }
+.topbar .btn.suggested { font-size: 10.5pt; }
+
+/* 菜单项禁用态（例如非双页时的「奇数页在左」） */
+.menu-row.is-off { opacity: 0.45; pointer-events: none; }
+
+/* 勾标回到上一版位置 */
+.sw-badge { left: 27px; top: 14px; }
