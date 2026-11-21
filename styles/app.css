@@ -1360,3 +1360,17 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .sw-badge { left: 24px; top: 20px; }
 
 .sw-badge { left: 24px; top: 23px; }
+
+/* 打开按钮与顶栏同色：无底色、无描边 */
+.topbar .btn.menubtn {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.topbar .btn.menubtn:hover { background: var(--hover); }
+
+/* 菜单再窄一点，贴 Adwaita */
+.gtk-menu { min-width: 196px; max-width: 240px; width: auto; }
+.menu-input { width: 56px; }
+.theme-row { margin: 8px 6px; gap: 10px; }

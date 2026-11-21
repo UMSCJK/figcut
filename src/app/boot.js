@@ -463,87 +463,12 @@ export function boot(opts = {}) {
   }
 
   // ---- 顶栏：左 打开▾ + 工具 / 中 两行标题 / 右 页码·侧栏·汉堡·导出 ----
-  // 打开：GtkMenuButton 形态（点开是最近文件，最后一行才是「打开…」）
-  const openBtn = addButton(shell, 'left', '打开', () => toggleOpenPopover(), {
-    title: '最近打开 (Ctrl+O)',
-    kind: 'btn',
-  });
+  // 打开：扁平按钮，直接弹文件选择（Alt+O / Ctrl+O）
+  const openBtn = addButton(shell, 'left', '打开', async () => {
+    const file = await chooseFile();
+    if (file) load(file);
+  }, { title: '打开 PDF (Alt+O)', kind: 'btn' });
   openBtn.classList.add('menubtn');
-  openBtn.classList.add('has-arrow');
-
-  const openPop = doc.createElement('div');
-  openPop.className = 'open-pop';
-  openPop.hidden = true;
-  document.body.appendChild(openPop);
-
-  function renderOpenPopover() {
-    openPop.textContent = '';
-    const list = readRecent();
-    if (list.length) {
-      const head = doc.createElement('div');
-      head.className = 'pop-head';
-      head.textContent = '最近打开';
-      openPop.appendChild(head);
-      for (const item of list.slice(0, 6)) {
-        const row = doc.createElement('button');
-        row.type = 'button';
-        row.className = 'pop-item';
-        row.textContent = item.name;
-        const meta = doc.createElement('span');
-        meta.className = 'pop-meta';
-        meta.textContent = (item.pages || '?') + ' 页';
-        row.appendChild(meta);
-        row.addEventListener('click', async () => {
-          closeOpenPopover();
-          const direct = await openRecent(item);
-          if (direct) load(direct);
-          else {
-            toast('这一份需要重新选择一次');
-            const f = await chooseFile();
-            if (f) load(f);
-          }
-        });
-        openPop.appendChild(row);
-      }
-    }
-    const pick = doc.createElement('button');
-    pick.type = 'button';
-    pick.className = 'pop-item';
-    pick.textContent = '打开文件…';
-    const accel = doc.createElement('span');
-    accel.className = 'pop-meta';
-    accel.textContent = 'Ctrl+O';
-    pick.appendChild(accel);
-    pick.addEventListener('click', async () => {
-      closeOpenPopover();
-      const file = await chooseFile();
-      if (file) load(file);
-    });
-    openPop.appendChild(pick);
-  }
-
-  function openOpenPopover() {
-    renderOpenPopover();
-    const r = openBtn.getBoundingClientRect();
-    openPop.style.top = Math.round(r.bottom + 6) + 'px';
-    openPop.style.left = Math.round(r.left) + 'px';
-    openPop.hidden = false;
-    openBtn.classList.add('is-open');
-    document.addEventListener('pointerdown', onOpenOutside, true);
-  }
-  function closeOpenPopover() {
-    openPop.hidden = true;
-    openBtn.classList.remove('is-open');
-    document.removeEventListener('pointerdown', onOpenOutside, true);
-  }
-  function onOpenOutside(ev) {
-    if (openPop.contains(ev.target) || openBtn.contains(ev.target)) return;
-    closeOpenPopover();
-  }
-  function toggleOpenPopover() {
-    if (openPop.hidden) openOpenPopover();
-    else closeOpenPopover();
-  }
 
   const undoUi = () => {
     const prev = undo(hist);
@@ -585,7 +510,7 @@ export function boot(opts = {}) {
 
   const APPEARANCES = [
     { ui: 'light', pdf: 'normal', cls: 'light', title: '浅色界面 · 浅色 PDF' },
-    { ui: 'system', pdf: 'auto', cls: 'follow', title: '跟随系统' },
+    { ui: 'dark', pdf: 'normal', cls: 'follow', title: '深色界面 · 浅色 PDF' },
     { ui: 'dark', pdf: 'invert', cls: 'dark', title: '深色界面 · 深色 PDF' },
   ];
   const themeRow = doc.createElement('div');
@@ -700,8 +625,9 @@ export function boot(opts = {}) {
     const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
     for (const { sw, item } of swatches) {
-      // 三个圆点就是三态：跟随系统 / 浅 / 深，只看 ui，避免同时亮两个
-      sw.classList.toggle('is-on', (theme.ui || 'system') === item.ui);
+      // 白 / 混合 / 黑 三态各自对应一组 (ui, pdf)
+      const active = resolvedUi(theme, prefersDark()) === item.ui && isInverted(theme, prefersDark()) === (item.pdf === 'invert');
+      sw.classList.toggle('is-on', active);
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';
   }
@@ -1293,6 +1219,7 @@ export function boot(opts = {}) {
       const doc = await openFile(file, opts);
       currentDoc = doc;
       currentName = file.name;
+      stack.applyLayout({ dual: true, oddLeft: true }); // 默认双页、奇数页在左
       const n = await stack.mount(doc);
 
       overlays.clear();

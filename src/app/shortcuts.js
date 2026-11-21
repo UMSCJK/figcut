@@ -34,6 +34,11 @@ export function resolveKey(ev) {
 
   if (isTyping(ev)) return key === 'Escape' ? 'cancel' : null;
 
+  if (ev.altKey && !ctrl) {
+    if (key.toLowerCase() === 'o') return 'file.open';
+    return null;
+  }
+
   if (ctrl) {
     const lower = key.toLowerCase();
     if (lower === 'z') return 'history.undo';
