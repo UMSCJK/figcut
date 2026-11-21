@@ -499,7 +499,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .region-row {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 12px 64px minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
@@ -830,3 +830,79 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .panel > * { max-width: 100%; }
 .preview-canvas, .region-thumb, .lightbox-canvas { max-width: 100%; }
 .region-row { max-width: 100%; }
+
+/* 左栏缩略图 hover 出的「看大图」 */
+.page-zoom {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.page-item:hover .page-zoom, .page-item:focus-visible .page-zoom { opacity: 1; }
+
+/* 右栏 figure 行的拖动抓手 */
+.region-grip {
+  width: 12px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 10px;
+  cursor: grab;
+  user-select: none;
+}
+
+.region-grip:active { cursor: grabbing; }
+.region-row.is-dragging { opacity: 0.45; }
+.region-row.is-drop { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---------- 平板 / 手机 ---------- */
+
+@media (max-width: 1100px) {
+  :root { --w-side: 180px; --w-panel: 190px; }
+  .pages { padding: 40px 14px 32px; }
+}
+
+@media (max-width: 900px) {
+  .tool-group .icon-btn { width: 32px; height: 28px; }
+  .icon-btn { width: 30px; height: 30px; }
+  .seg-btn { width: 30px; height: 30px; }
+  .topbar .title { font-size: 12px; }
+  .zoom-control { right: 8px; bottom: 8px; }
+}
+
+@media (max-width: 720px) {
+  .pages { padding: 34px 6px 24px; gap: 12px; }
+  .page-row { gap: 10px; }
+  .page-row[data-single="right"] > .page { grid-column: 1 / -1; justify-self: center; }
+  .page-list.is-double { grid-template-columns: 1fr; }
+  .side-head { padding: 6px 8px 4px; }
+  .zoom-control .zoom-entry { min-width: 62px; }
+  .lightbox-bar .icon-btn { width: 34px; height: 34px; }
+  .region-note { display: none; }
+  .region-row { grid-template-columns: 12px 54px minmax(0, 1fr) auto; }
+  .region-thumb { width: 54px; }
+  .topbar { padding: 0 6px; }
+  .topbar .btn { padding: 0 9px; font-size: 12px; }
+}
+
+@media (max-width: 720px) {
+  /* 手机上顶栏放不下标题：直接隐藏，别和工具组叠在一起 */
+  .topbar .title-block { display: none; }
+  .topbar { gap: 4px; justify-content: space-between; padding: 0 4px; }
+  .topbar .btn { white-space: nowrap; padding: 0 8px; }
+  .topbar .cluster { gap: 2px; }
+  .seg { display: none; }
+}

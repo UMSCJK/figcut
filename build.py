@@ -2,7 +2,7 @@
 """figcut 构建：把 index.html + styles/ + src/ 打成一个可双击的单文件 HTML。
 
 fail-fast：缺文件、缺导出、循环 import、名字冲突、残留 import/export、语法错误
-全部直接失败，绝不产出半坏的包。pdf.js 保持 vendor/ 外链。
+全部直接失败，绝不产出半坏的包。pdf.js 走 CDN（unpkg，版本钉死）。
 
 用法：
   python3 build.py            # 产出 figure-workbench.html

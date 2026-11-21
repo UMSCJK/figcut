@@ -4,7 +4,9 @@
 import { figcutError } from '../core/errors.js';
 import { openDocument } from '../pdf/document.js';
 
-const WORKER_SRC = 'vendor/pdfjs/pdf.worker.min.js';
+// pdf.js 走 CDN，worker 跟同一个版本
+const PDFJS_VERSION = '3.11.174';
+const WORKER_SRC = 'https://unpkg.com/pdfjs-dist@' + PDFJS_VERSION + '/build/pdf.worker.min.js';
 
 export async function openFile(file, opts = {}) {
   if (!file) throw figcutError('no-file', '没有文件');

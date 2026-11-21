@@ -570,7 +570,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .region-row {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 12px 64px minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
@@ -902,6 +902,82 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .preview-canvas, .region-thumb, .lightbox-canvas { max-width: 100%; }
 .region-row { max-width: 100%; }
 
+/* 左栏缩略图 hover 出的「看大图」 */
+.page-zoom {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.page-item:hover .page-zoom, .page-item:focus-visible .page-zoom { opacity: 1; }
+
+/* 右栏 figure 行的拖动抓手 */
+.region-grip {
+  width: 12px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 10px;
+  cursor: grab;
+  user-select: none;
+}
+
+.region-grip:active { cursor: grabbing; }
+.region-row.is-dragging { opacity: 0.45; }
+.region-row.is-drop { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---------- 平板 / 手机 ---------- */
+
+@media (max-width: 1100px) {
+  :root { --w-side: 180px; --w-panel: 190px; }
+  .pages { padding: 40px 14px 32px; }
+}
+
+@media (max-width: 900px) {
+  .tool-group .icon-btn { width: 32px; height: 28px; }
+  .icon-btn { width: 30px; height: 30px; }
+  .seg-btn { width: 30px; height: 30px; }
+  .topbar .title { font-size: 12px; }
+  .zoom-control { right: 8px; bottom: 8px; }
+}
+
+@media (max-width: 720px) {
+  .pages { padding: 34px 6px 24px; gap: 12px; }
+  .page-row { gap: 10px; }
+  .page-row[data-single="right"] > .page { grid-column: 1 / -1; justify-self: center; }
+  .page-list.is-double { grid-template-columns: 1fr; }
+  .side-head { padding: 6px 8px 4px; }
+  .zoom-control .zoom-entry { min-width: 62px; }
+  .lightbox-bar .icon-btn { width: 34px; height: 34px; }
+  .region-note { display: none; }
+  .region-row { grid-template-columns: 12px 54px minmax(0, 1fr) auto; }
+  .region-thumb { width: 54px; }
+  .topbar { padding: 0 6px; }
+  .topbar .btn { padding: 0 9px; font-size: 12px; }
+}
+
+@media (max-width: 720px) {
+  /* 手机上顶栏放不下标题：直接隐藏，别和工具组叠在一起 */
+  .topbar .title-block { display: none; }
+  .topbar { gap: 4px; justify-content: space-between; padding: 0 4px; }
+  .topbar .btn { white-space: nowrap; padding: 0 8px; }
+  .topbar .cluster { gap: 2px; }
+  .seg { display: none; }
+}
+
 </style>
 </head>
 <body>
@@ -941,7 +1017,7 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   </main>
   <div class="banner" id="banner" hidden></div>
 </div>
-<script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js" crossorigin="anonymous"></script>
 <script>
 (function () {
 'use strict';
@@ -2666,7 +2742,7 @@ function labelOf(region) {
 
 function renderRegions(host, opts) {
   const doc = host.ownerDocument;
-  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb, onThumbClick } = opts;
+  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb, onThumbClick, onReorder } = opts;
   // 清掉上一轮挂在 body 上的类型弹层
   for (const old of doc.querySelectorAll('.opt-menu')) old.remove();
   host.textContent = '';
@@ -2700,6 +2776,32 @@ function renderRegions(host, opts) {
         }
         onSelect(r);
       });
+
+      // 拖动抓手：只在同一页内换顺序
+      const grip = doc.createElement('span');
+      grip.className = 'region-grip';
+      grip.textContent = '⋮⋮';
+      grip.title = '拖动调整顺序';
+      grip.draggable = true;
+      grip.addEventListener('dragstart', (ev) => {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(r.id));
+        row.classList.add('is-dragging');
+      });
+      grip.addEventListener('dragend', () => row.classList.remove('is-dragging'));
+      row.addEventListener('dragover', (ev) => {
+        if (r.page !== page) return;
+        ev.preventDefault();
+        row.classList.add('is-drop');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
+      row.addEventListener('drop', (ev) => {
+        ev.preventDefault();
+        row.classList.remove('is-drop');
+        const id = Number(ev.dataTransfer.getData('text/plain'));
+        if (id && id !== r.id && onReorder) onReorder(id, r.id);
+      });
+      row.appendChild(grip);
 
       const thumb = onThumb ? onThumb(r) : null;
       if (thumb) {
@@ -2784,6 +2886,17 @@ function renderPageList(host, opts) {
     badge.className = 'page-count';
     badge.textContent = counts[p.no] ? String(counts[p.no]) : '';
     frame.appendChild(badge);
+
+    // 看大图：鼠标悬停才出现，不影响点缩略图跳页
+    const zoom = doc.createElement('span');
+    zoom.className = 'page-zoom';
+    zoom.textContent = '⤢';
+    zoom.title = '全屏看这一页';
+    zoom.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      opts.onZoom && opts.onZoom(p.no);
+    });
+    frame.appendChild(zoom);
 
     row.appendChild(frame);
     row.addEventListener('click', () => onPick && onPick(p.no));
@@ -3306,7 +3419,9 @@ async function pageSize(doc, pageNo) {
 
 
 
-const WORKER_SRC = 'vendor/pdfjs/pdf.worker.min.js';
+// pdf.js 走 CDN，worker 跟同一个版本
+const PDFJS_VERSION = '3.11.174';
+const WORKER_SRC = 'https://unpkg.com/pdfjs-dist@' + PDFJS_VERSION + '/build/pdf.worker.min.js';
 
 async function openFile(file, opts = {}) {
   if (!file) throw figcutError('no-file', '没有文件');
@@ -3525,14 +3640,55 @@ function hasPickHandle() {
   return typeof window !== 'undefined' && typeof window.showOpenFilePicker === 'function';
 }
 
+const LAST_KEY = '@last';
+
+async function saveLastHandle(handle) {
+  if (!handle || !hasIdb()) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(handle, LAST_KEY);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function loadLastHandle() {
+  if (!hasIdb()) return null;
+  try {
+    const db = await openDb();
+    const handle = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(LAST_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return handle;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function pickWithHandle() {
   if (!hasPickHandle()) return null;
   try {
-    const [handle] = await window.showOpenFilePicker({
+    // 从上次打开的文件所在目录开始，别又跳回「文档」
+    const startIn = await loadLastHandle();
+    const options = {
       types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }],
       multiple: false,
-    });
+    };
+    if (startIn) options.startIn = startIn;
+    const [handle] = await window.showOpenFilePicker(options);
     if (!handle) return null;
+    await saveLastHandle(handle);
     const file = await handle.getFile();
     return { file, handle };
   } catch (e) {
@@ -4512,6 +4668,23 @@ function boot(opts = {}) {
   const preview = createPreview(previewHost);
   let lastListSig = '';
 
+  // 拖动排序：把 from 插到 to 的位置，然后重排同页的 order 字段
+  function reorderRegion(fromId, toId) {
+    const from = ed.regions.findIndex((r) => r.id === fromId);
+    const to = ed.regions.findIndex((r) => r.id === toId);
+    if (from < 0 || to < 0 || from === to) return;
+    const [moved] = ed.regions.splice(from, 1);
+    ed.regions.splice(to, 0, moved);
+    const page = moved.page;
+    let n = 0;
+    for (const r of ed.regions) {
+      if (r.page === page) r.order = n++;
+    }
+    record(null);
+    lastListSig = '';
+    refresh();
+  }
+
   function selectRegion(region) {
     if (!region) {
       ed.selectedId = null;
@@ -4689,6 +4862,7 @@ function boot(opts = {}) {
         current: ed.page,
         regions: ed.regions,
         onPick: (no) => goPage(no),
+        onZoom: (no) => openLightbox(no),
         thumbFor,
         cols: effectiveCols(),
       });
@@ -4707,6 +4881,7 @@ function boot(opts = {}) {
       },
       onThumb: regionThumb,
       onThumbClick: (region) => openFigureLightbox(region),
+      onReorder: (fromId, toId) => reorderRegion(fromId, toId),
       onDelete: (region) => {
         const idx = ed.regions.indexOf(region);
         if (idx >= 0) ed.regions.splice(idx, 1);
@@ -5331,6 +5506,10 @@ function boot(opts = {}) {
         hist.present = snapshot();
       }
 
+      // 手机上先给「适应页宽」，不然 A4 一屏放不下还得左右拖
+      if (typeof window !== 'undefined' && window.innerWidth < 720 && zoom.mode === 'free') {
+        setFit(zoom, 'width', fitDims());
+      }
       render();
       pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
@@ -5448,8 +5627,18 @@ function boot(opts = {}) {
   // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
   const LAYOUT_KEY = 'figcut.layout';
   const layout = (() => {
+    let saved = null;
     try {
-      return JSON.parse((storage && storage.getItem(LAYOUT_KEY)) || '{}') || {};
+      saved = storage && storage.getItem(LAYOUT_KEY);
+      const parsed = JSON.parse(saved || '{}') || {};
+      // 第一次在小屏打开：默认收起侧栏，先把页面给出来
+      if (!saved && typeof window !== 'undefined') {
+        const vw = window.innerWidth;
+        if (vw < 900) parsed.leftCollapsed = true;
+        if (vw < 720) parsed.rightCollapsed = true;
+        if (vw < 720) parsed.sideCols = 1;
+      }
+      return parsed;
     } catch (e) {
       return {};
     }
@@ -5543,10 +5732,18 @@ function boot(opts = {}) {
   bindSplitter(document.getElementById('split-left'), 'left');
   bindSplitter(document.getElementById('split-right'), 'right');
 
-  // 左栏单/双列：太窄时禁用
+  // 左栏页头：全览 + 单/双列
   const sideHead = document.getElementById('side-head');
   let colsBtn = null;
   if (sideHead) {
+    const gallery = doc.createElement('button');
+    gallery.type = 'button';
+    gallery.className = 'icon-btn';
+    gallery.innerHTML = ICONS.grid;
+    gallery.title = '预览全部页面';
+    gallery.addEventListener('click', () => openLightbox(ed.page));
+    sideHead.appendChild(gallery);
+
     colsBtn = doc.createElement('button');
     colsBtn.type = 'button';
     colsBtn.className = 'icon-btn';
@@ -5574,7 +5771,7 @@ function boot(opts = {}) {
     });
   }
 
-  const DOUBLE_MIN = 340;
+  const DOUBLE_MIN = 288;
 
   function effectiveCols() {
     return layout.sideCols === 2 ? 2 : 1;

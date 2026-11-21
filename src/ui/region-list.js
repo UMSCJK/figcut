@@ -22,7 +22,7 @@ export function labelOf(region) {
 
 export function renderRegions(host, opts) {
   const doc = host.ownerDocument;
-  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb, onThumbClick } = opts;
+  const { regions, page, selectedId, onSelect, onChange, onDelete, onThumb, onThumbClick, onReorder } = opts;
   // 清掉上一轮挂在 body 上的类型弹层
   for (const old of doc.querySelectorAll('.opt-menu')) old.remove();
   host.textContent = '';
@@ -56,6 +56,32 @@ export function renderRegions(host, opts) {
         }
         onSelect(r);
       });
+
+      // 拖动抓手：只在同一页内换顺序
+      const grip = doc.createElement('span');
+      grip.className = 'region-grip';
+      grip.textContent = '⋮⋮';
+      grip.title = '拖动调整顺序';
+      grip.draggable = true;
+      grip.addEventListener('dragstart', (ev) => {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(r.id));
+        row.classList.add('is-dragging');
+      });
+      grip.addEventListener('dragend', () => row.classList.remove('is-dragging'));
+      row.addEventListener('dragover', (ev) => {
+        if (r.page !== page) return;
+        ev.preventDefault();
+        row.classList.add('is-drop');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
+      row.addEventListener('drop', (ev) => {
+        ev.preventDefault();
+        row.classList.remove('is-drop');
+        const id = Number(ev.dataTransfer.getData('text/plain'));
+        if (id && id !== r.id && onReorder) onReorder(id, r.id);
+      });
+      row.appendChild(grip);
 
       const thumb = onThumb ? onThumb(r) : null;
       if (thumb) {

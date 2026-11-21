@@ -44,6 +44,17 @@ export function renderPageList(host, opts) {
     badge.textContent = counts[p.no] ? String(counts[p.no]) : '';
     frame.appendChild(badge);
 
+    // 看大图：鼠标悬停才出现，不影响点缩略图跳页
+    const zoom = doc.createElement('span');
+    zoom.className = 'page-zoom';
+    zoom.textContent = '⤢';
+    zoom.title = '全屏看这一页';
+    zoom.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      opts.onZoom && opts.onZoom(p.no);
+    });
+    frame.appendChild(zoom);
+
     row.appendChild(frame);
     row.addEventListener('click', () => onPick && onPick(p.no));
     list.appendChild(row);

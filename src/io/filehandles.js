@@ -155,14 +155,55 @@ export function hasPickHandle() {
   return typeof window !== 'undefined' && typeof window.showOpenFilePicker === 'function';
 }
 
+const LAST_KEY = '@last';
+
+export async function saveLastHandle(handle) {
+  if (!handle || !hasIdb()) return false;
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(handle, LAST_KEY);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function loadLastHandle() {
+  if (!hasIdb()) return null;
+  try {
+    const db = await openDb();
+    const handle = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(LAST_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return handle;
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function pickWithHandle() {
   if (!hasPickHandle()) return null;
   try {
-    const [handle] = await window.showOpenFilePicker({
+    // 从上次打开的文件所在目录开始，别又跳回「文档」
+    const startIn = await loadLastHandle();
+    const options = {
       types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }],
       multiple: false,
-    });
+    };
+    if (startIn) options.startIn = startIn;
+    const [handle] = await window.showOpenFilePicker(options);
     if (!handle) return null;
+    await saveLastHandle(handle);
     const file = await handle.getFile();
     return { file, handle };
   } catch (e) {

@@ -187,6 +187,23 @@ export function boot(opts = {}) {
   const preview = createPreview(previewHost);
   let lastListSig = '';
 
+  // 拖动排序：把 from 插到 to 的位置，然后重排同页的 order 字段
+  function reorderRegion(fromId, toId) {
+    const from = ed.regions.findIndex((r) => r.id === fromId);
+    const to = ed.regions.findIndex((r) => r.id === toId);
+    if (from < 0 || to < 0 || from === to) return;
+    const [moved] = ed.regions.splice(from, 1);
+    ed.regions.splice(to, 0, moved);
+    const page = moved.page;
+    let n = 0;
+    for (const r of ed.regions) {
+      if (r.page === page) r.order = n++;
+    }
+    record(null);
+    lastListSig = '';
+    refresh();
+  }
+
   function selectRegion(region) {
     if (!region) {
       ed.selectedId = null;
@@ -364,6 +381,7 @@ export function boot(opts = {}) {
         current: ed.page,
         regions: ed.regions,
         onPick: (no) => goPage(no),
+        onZoom: (no) => openLightbox(no),
         thumbFor,
         cols: effectiveCols(),
       });
@@ -382,6 +400,7 @@ export function boot(opts = {}) {
       },
       onThumb: regionThumb,
       onThumbClick: (region) => openFigureLightbox(region),
+      onReorder: (fromId, toId) => reorderRegion(fromId, toId),
       onDelete: (region) => {
         const idx = ed.regions.indexOf(region);
         if (idx >= 0) ed.regions.splice(idx, 1);
@@ -1006,6 +1025,10 @@ export function boot(opts = {}) {
         hist.present = snapshot();
       }
 
+      // 手机上先给「适应页宽」，不然 A4 一屏放不下还得左右拖
+      if (typeof window !== 'undefined' && window.innerWidth < 720 && zoom.mode === 'free') {
+        setFit(zoom, 'width', fitDims());
+      }
       render();
       pageMask(1); // 预热首页掩膜
       setTitle(shell, file.name + ' · ' + n + ' 页');
@@ -1123,8 +1146,18 @@ export function boot(opts = {}) {
   // ---- 侧栏拖拽 / 折叠（宽度记在 localStorage） ----
   const LAYOUT_KEY = 'figcut.layout';
   const layout = (() => {
+    let saved = null;
     try {
-      return JSON.parse((storage && storage.getItem(LAYOUT_KEY)) || '{}') || {};
+      saved = storage && storage.getItem(LAYOUT_KEY);
+      const parsed = JSON.parse(saved || '{}') || {};
+      // 第一次在小屏打开：默认收起侧栏，先把页面给出来
+      if (!saved && typeof window !== 'undefined') {
+        const vw = window.innerWidth;
+        if (vw < 900) parsed.leftCollapsed = true;
+        if (vw < 720) parsed.rightCollapsed = true;
+        if (vw < 720) parsed.sideCols = 1;
+      }
+      return parsed;
     } catch (e) {
       return {};
     }
@@ -1218,10 +1251,18 @@ export function boot(opts = {}) {
   bindSplitter(document.getElementById('split-left'), 'left');
   bindSplitter(document.getElementById('split-right'), 'right');
 
-  // 左栏单/双列：太窄时禁用
+  // 左栏页头：全览 + 单/双列
   const sideHead = document.getElementById('side-head');
   let colsBtn = null;
   if (sideHead) {
+    const gallery = doc.createElement('button');
+    gallery.type = 'button';
+    gallery.className = 'icon-btn';
+    gallery.innerHTML = ICONS.grid;
+    gallery.title = '预览全部页面';
+    gallery.addEventListener('click', () => openLightbox(ed.page));
+    sideHead.appendChild(gallery);
+
     colsBtn = doc.createElement('button');
     colsBtn.type = 'button';
     colsBtn.className = 'icon-btn';
@@ -1249,7 +1290,7 @@ export function boot(opts = {}) {
     });
   }
 
-  const DOUBLE_MIN = 340;
+  const DOUBLE_MIN = 288;
 
   function effectiveCols() {
     return layout.sideCols === 2 ? 2 : 1;
