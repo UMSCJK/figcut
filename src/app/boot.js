@@ -572,7 +572,7 @@ export function boot(opts = {}) {
 
     if (on) {
       const badge = doc.createElementNS(NS, 'circle');
-      badge.setAttribute('cx', '46');
+      badge.setAttribute('cx', '36');
       badge.setAttribute('cy', '35');
       badge.setAttribute('r', '8');
       badge.setAttribute('fill', 'var(--accent)');
@@ -580,7 +580,7 @@ export function boot(opts = {}) {
       badge.setAttribute('stroke-width', '2');
       svg.appendChild(badge);
       const tick = doc.createElementNS(NS, 'path');
-      tick.setAttribute('d', 'M42.4 35.2l2.4 2.4 4.2-4.6');
+      tick.setAttribute('d', 'M32.4 35.2l2.4 2.4 4.2-4.6');
       tick.setAttribute('fill', 'none');
       tick.setAttribute('stroke', '#fff');
       tick.setAttribute('stroke-width', '2');
