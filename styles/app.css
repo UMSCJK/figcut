@@ -1411,3 +1411,36 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 适应页面：当前行下面垫出空白，下一行不会露头 */
 .pages.is-fitpage .page-row { margin-bottom: var(--fit-extra, 0px); }
+
+/* 顶栏所有按钮统一高度 34，导出与打开同尺寸 */
+.topbar .btn { height: 34px; }
+.topbar .btn.suggested { height: 34px; padding: 0 12px; min-width: 62px; border-radius: 7px; }
+.topbar .btn.menubtn { padding: 0 12px; min-width: 62px; }
+
+/* 成对菜单行（同一行两个动作） */
+.menu-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px 2px; }
+
+.pair-btn {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5pt;
+}
+
+.pair-btn:hover { background: var(--hover); }
+.pair-accel { margin-left: auto; color: var(--text-3); font-size: 9pt; }
+
+/* 空状态：没有侧栏、没有汉堡/导出 */
+:root[data-empty="1"] .sidebar,
+:root[data-empty="1"] .panel,
+:root[data-empty="1"] .splitter { display: none !important; }
+
+:root[data-empty="1"] .body { grid-template-columns: 1fr; }
+:root[data-empty="1"] [data-role="menu"] { display: none !important; }

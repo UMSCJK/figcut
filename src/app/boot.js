@@ -490,6 +490,7 @@ export function boot(opts = {}) {
   menuBtn.type = 'button';
   menuBtn.className = 'icon-btn';
   menuBtn.title = '主菜单';
+  menuBtn.dataset.role = 'menu';
   menuBtn.setAttribute('aria-haspopup', 'menu');
   menuBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
   shell.right.appendChild(menuBtn);
@@ -553,32 +554,56 @@ export function boot(opts = {}) {
   zIn.textContent = '+';
   zoomRow.append(zOut, zLabel, zIn);
   menu.appendChild(zoomRow);
-  menu.appendChild(sepLine());
-  zOut.addEventListener('click', () => stepZoomBy(-1));
-  zIn.addEventListener('click', () => stepZoomBy(1));
-  zLabel.addEventListener('click', () => setScale(zoom, 1));
 
-  // 导出设置
+  // 适应页宽 / 适应页面 同一行
+  menu.appendChild(pairRow([
+    ['适应页宽', 'S', () => { doFitWidth(); closeMenu(); }],
+    ['适应页面', 'F', () => { doFitPage(); closeMenu(); }],
+  ]));
+  menu.appendChild(sepLine());
+
+  // 撤销 / 重做 同一行
+  menu.appendChild(pairRow([
+    ['撤销', 'Ctrl+Z', () => { undoUi(); closeMenu(); }],
+    ['重做', 'Ctrl+Y', () => { redoUi(); closeMenu(); }],
+  ]));
+  menu.appendChild(sepLine());
+
   const dpiRow = menuRow('导出分辨率', settings.dpi, 'dpi');
   const marginRow = menuRow('导出边距', settings.margin, 'margin');
   menu.appendChild(dpiRow.el);
   menu.appendChild(marginRow.el);
   menu.appendChild(sepLine());
 
-  const undoRow = menuRow('撤销', 'Ctrl+Z', null, () => { undoUi(); closeMenu(); });
-  const redoRow = menuRow('重做', 'Ctrl+Y', null, () => { redoUi(); closeMenu(); });
-  menu.appendChild(undoRow.el);
-  menu.appendChild(redoRow.el);
-  menu.appendChild(sepLine());
   menu.appendChild(menuRow('连续滚动', 'C', null, () => { stack.applyLayout({ continuous: !stack.view.continuous }); closeMenu(); }).el);
   menu.appendChild(menuRow('双页模式', 'D', null, () => { stack.applyLayout({ dual: !stack.view.dual }); closeMenu(); }).el);
   menu.appendChild(menuRow('奇数页在左', 'O', null, () => { stack.applyLayout({ oddLeft: !stack.view.oddLeft }); closeMenu(); }).el);
   menu.appendChild(sepLine());
-  menu.appendChild(menuRow('适应页宽', 'S', null, () => { doFitWidth(); closeMenu(); }).el);
-  menu.appendChild(menuRow('适应页面', 'F', null, () => { doFitPage(); closeMenu(); }).el);
   menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
   document.body.appendChild(menu);
+
+  function pairRow(defs) {
+    const el = doc.createElement('div');
+    el.className = 'menu-pair';
+    for (const [label, accel, action] of defs) {
+      const b = doc.createElement('button');
+      b.type = 'button';
+      b.className = 'pair-btn';
+      const name = doc.createElement('span');
+      name.textContent = label;
+      b.appendChild(name);
+      if (accel) {
+        const a = doc.createElement('span');
+        a.className = 'pair-accel';
+        a.textContent = accel;
+        b.appendChild(a);
+      }
+      b.addEventListener('click', action);
+      el.appendChild(b);
+    }
+    return el;
+  }
 
   function sepLine() {
     const d = doc.createElement('div');
