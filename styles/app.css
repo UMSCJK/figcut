@@ -1259,3 +1259,26 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 菜单整体加宽一点，放得下快捷键列 */
 .gtk-menu { width: 262px; }
+
+/* 打开按钮：GNOME 的扁平 MenuButton（无描边、34 高、带箭头） */
+.topbar .btn.menubtn {
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.topbar .btn.menubtn:hover { background: var(--hover); }
+
+/* 顶栏按钮统一 34 高 */
+.topbar .icon-btn { width: 34px; height: 34px; }
+
+/* 菜单收到 Adwaita 常见宽度 */
+.gtk-menu { width: 244px; }
+.menu-input { width: 64px; }
+
+/* 圆点 40，间隔 12 */
+.sw { width: 40px; height: 40px; }
+.theme-row { gap: 12px; padding: 8px 0 10px; }

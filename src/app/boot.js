@@ -604,6 +604,7 @@ export function boot(opts = {}) {
       theme.ui = item.ui;
       theme.pdf = item.pdf;
       applyColors();
+      syncMenu(); // 立刻更新高亮，否则要等下次打开菜单
     });
     themeRow.appendChild(sw);
     return { sw, item };
