@@ -699,12 +699,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .side-toggle:hover { background: var(--hover); color: var(--text); }
 .side-toggle.is-right { left: auto; right: 6px; }
 
-.sidebar.is-collapsed > *:not(.side-toggle):not(.rail-toggle),
-.panel.is-collapsed > *:not(.side-toggle):not(.rail-toggle) { display: none !important; }
-
-.sidebar.is-collapsed, .panel.is-collapsed { overflow: hidden; }
-.sidebar.is-collapsed .side-toggle, .panel.is-collapsed .side-toggle { left: 3px; bottom: 6px; }
-.panel.is-collapsed .side-toggle { left: auto; right: 3px; }
 
 /* 顶栏内联的导出设置 */
 .settings-inline {
@@ -961,11 +955,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .rail-toggle:hover { background: var(--hover); color: var(--text); }
 .rail-toggle.is-right { left: auto; right: 4px; }
-.sidebar:not(.is-collapsed) .rail-toggle,
-.panel:not(.is-collapsed) .rail-toggle { display: none; }
-
-.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head { display: none; }
-.sidebar.is-collapsed .rail-toggle, .panel.is-collapsed .rail-toggle { display: flex; }
 
 /* ---------- 全屏查看器 ---------- */
 .lightbox-inner {
@@ -1017,3 +1006,73 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 查看器：给 stage 一个确定高度，否则 flex 里会塌成 0 */
 .lightbox-inner { height: 92vh; }
 .lightbox-stage { flex: 1 1 auto; min-height: 0; }
+
+/* ---------- 侧栏折叠（GTK4 / gitlab.gnome.org 风格） ---------- */
+.sidebar, .panel { display: flex; flex-direction: column; }
+
+.side-foot {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: var(--sidebar);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.side-foot:hover { background: var(--hover); color: var(--text); }
+.side-foot .foot-icon { display: inline-flex; width: 16px; height: 16px; flex: none; }
+.side-foot .foot-icon svg { width: 16px; height: 16px; }
+
+.panel .side-foot { justify-content: flex-end; }
+
+/* 收起：48px 窄条，底部只留图标，顶部竖排工具 */
+.sidebar.is-collapsed, .panel.is-collapsed { width: 48px; overflow: hidden; }
+.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head,
+.sidebar.is-collapsed .page-list, .panel.is-collapsed > *:not(.side-foot):not(.rail-tools) {
+  display: none !important;
+}
+
+.sidebar.is-collapsed .side-foot, .panel.is-collapsed .side-foot {
+  justify-content: center;
+  padding: 0;
+  border-top: 0;
+}
+
+.sidebar.is-collapsed .foot-label, .panel.is-collapsed .foot-label { display: none; }
+
+.rail-tools[hidden] { display: none; }
+.rail-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.rail-tools .tool-group {
+  flex-direction: column;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  gap: 2px;
+}
+
+.rail-tools .tool-group .icon-btn { width: 32px; height: 32px; }
+
+/* 让底栏永远在最后，不被后插入的列表挤到上面 */
+.side-foot { order: 99; flex: 0 0 34px; height: 34px; }
+.page-list { order: 1; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.side-head { order: 0; flex: none; }
+#preview-host, .region-list, .panel > .region-list { order: 1; flex: 1 1 auto; min-height: 0; }
+.rail-tools { order: 0; }

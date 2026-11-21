@@ -19,8 +19,9 @@ export const ICONS = {
   minus: wrap('<path d="M3.6 8h8.8"/>'),
   plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
   grid: wrap('<rect x="2.6" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="0.8"/>'),
-  sidebarLeft: wrap('<rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="4.2" y="5" width="3" height="6" rx="0.8" fill="currentColor" stroke="none"/>'),
-  sidebarRight: wrap('<rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8.8" y="5" width="3" height="6" rx="0.8" fill="currentColor" stroke="none"/>'),
+  // GTK4 sidebar 图标：竖线 + 箭头（|← 收起 / →| 展开）
+  sidebarLeft: wrap('<path d="M3.5 3v10"/><path d="M13 8H7"/><path d="M9.6 5.4 7 8l2.6 2.6"/>'),
+  sidebarRight: wrap('<path d="M12.5 3v10"/><path d="M3 8h6"/><path d="M6.4 5.4 9 8l-2.6 2.6"/>'),
   columns: wrap('<rect x="2.4" y="2.8" width="4.4" height="10.4" rx="1"/><rect x="9.2" y="2.8" width="4.4" height="10.4" rx="1"/>'),
   fitWidth: wrap('<rect x="2.4" y="3.2" width="4.2" height="9.6" rx="0.6"/><path d="M9 8h4.4M11.6 5.6L13.8 8l-2.2 2.4"/>'),
   fitPage: wrap('<rect x="4" y="2.6" width="8" height="10.8" rx="0.8"/><path d="M6 5.4h4M6 8h4M6 10.6h4"/>'),

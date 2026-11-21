@@ -1287,7 +1287,10 @@ export function boot(opts = {}) {
     }
   };
 
-  const COLLAPSED_W = 31;
+  const COLLAPSED_W = 48;
+  let leftFoot = null;
+  let rightFoot = null;
+  let railTools = null;
 
   function applyLayout() {
     const root = document.documentElement;
@@ -1305,6 +1308,18 @@ export function boot(opts = {}) {
       panel = Math.max(160, Math.floor(panel * k));
     }
     root.style.setProperty('--w-side', (layout.leftCollapsed ? COLLAPSED_W : side) + 'px');
+    // 收起时把 QWE 工具竖排到窄条里
+    if (railTools && toolGroup) {
+      if (layout.leftCollapsed) {
+        railTools.hidden = false;
+        railTools.appendChild(toolGroup);
+      } else {
+        railTools.hidden = true;
+        shell.left.appendChild(toolGroup);
+      }
+    }
+    paintFoot(leftFoot, !!layout.leftCollapsed, 'left');
+    paintFoot(rightFoot, !!layout.rightCollapsed, 'right');
     root.style.setProperty('--w-panel', (layout.rightCollapsed ? COLLAPSED_W : panel) + 'px');
     shell.panelLeft.classList.toggle('is-collapsed', !!layout.leftCollapsed);
     shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
@@ -1411,24 +1426,22 @@ export function boot(opts = {}) {
     colsBtn.title = double ? '切回单列' : '切到双列';
   }
 
-  // 折叠按钮：表头里一个，收起后在底角留一个同样的
-  function makeToggle(host, icon, isRight) {
-    if (!host) return null;
-    const btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.className = 'icon-btn toggle-btn';
-    btn.innerHTML = icon;
-    btn.title = isRight ? '收起/展开右栏' : '收起/展开左栏';
-    host.appendChild(btn);
-    return btn;
-  }
+  // 折叠按钮固定在栏底：展开时「|← 收起侧边栏」，收起时只留图标
+  leftFoot = document.getElementById('toggle-left');
+  rightFoot = document.getElementById('toggle-right');
+  railTools = document.getElementById('rail-tools');
 
-  const leftRail = document.getElementById('rail-left');
-  const rightRail = document.getElementById('rail-right');
-  const leftToggle = makeToggle(sideHead, ICONS.sidebarLeft, false);
-  const rightToggle = makeToggle(document.getElementById('panel-head'), ICONS.sidebarRight, true);
-  if (leftRail) leftRail.innerHTML = ICONS.sidebarLeft;
-  if (rightRail) rightRail.innerHTML = ICONS.sidebarRight;
+  function paintFoot(btn, collapsed, side) {
+    if (!btn) return;
+    const icon = side === 'left'
+      ? collapsed ? ICONS.sidebarRight : ICONS.sidebarLeft
+      : collapsed ? ICONS.sidebarLeft : ICONS.sidebarRight;
+    const iconEl = btn.querySelector('.foot-icon');
+    const labelEl = btn.querySelector('.foot-label');
+    if (iconEl) iconEl.innerHTML = icon;
+    if (labelEl) labelEl.textContent = '收起侧边栏';
+    btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+  }
 
   const flipLeft = () => {
     layout.leftCollapsed = !layout.leftCollapsed;
@@ -1442,10 +1455,11 @@ export function boot(opts = {}) {
     saveLayout();
     scheduleRefit();
   };
-  if (leftToggle) leftToggle.addEventListener('click', flipLeft);
-  if (rightToggle) rightToggle.addEventListener('click', flipRight);
-  if (leftRail) leftRail.addEventListener('click', flipLeft);
-  if (rightRail) rightRail.addEventListener('click', flipRight);
+  if (leftFoot) leftFoot.addEventListener('click', flipLeft);
+  if (rightFoot) rightFoot.addEventListener('click', flipRight);
+
+  // 首次 applyLayout 时这些按钮还没建好，这里补刷一次
+  applyLayout();
 
   updateColsBtn && updateColsBtn();
 

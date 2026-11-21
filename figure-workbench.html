@@ -770,12 +770,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .side-toggle:hover { background: var(--hover); color: var(--text); }
 .side-toggle.is-right { left: auto; right: 6px; }
 
-.sidebar.is-collapsed > *:not(.side-toggle):not(.rail-toggle),
-.panel.is-collapsed > *:not(.side-toggle):not(.rail-toggle) { display: none !important; }
-
-.sidebar.is-collapsed, .panel.is-collapsed { overflow: hidden; }
-.sidebar.is-collapsed .side-toggle, .panel.is-collapsed .side-toggle { left: 3px; bottom: 6px; }
-.panel.is-collapsed .side-toggle { left: auto; right: 3px; }
 
 /* 顶栏内联的导出设置 */
 .settings-inline {
@@ -1032,11 +1026,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .rail-toggle:hover { background: var(--hover); color: var(--text); }
 .rail-toggle.is-right { left: auto; right: 4px; }
-.sidebar:not(.is-collapsed) .rail-toggle,
-.panel:not(.is-collapsed) .rail-toggle { display: none; }
-
-.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head { display: none; }
-.sidebar.is-collapsed .rail-toggle, .panel.is-collapsed .rail-toggle { display: flex; }
 
 /* ---------- 全屏查看器 ---------- */
 .lightbox-inner {
@@ -1089,6 +1078,76 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .lightbox-inner { height: 92vh; }
 .lightbox-stage { flex: 1 1 auto; min-height: 0; }
 
+/* ---------- 侧栏折叠（GTK4 / gitlab.gnome.org 风格） ---------- */
+.sidebar, .panel { display: flex; flex-direction: column; }
+
+.side-foot {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: var(--sidebar);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.side-foot:hover { background: var(--hover); color: var(--text); }
+.side-foot .foot-icon { display: inline-flex; width: 16px; height: 16px; flex: none; }
+.side-foot .foot-icon svg { width: 16px; height: 16px; }
+
+.panel .side-foot { justify-content: flex-end; }
+
+/* 收起：48px 窄条，底部只留图标，顶部竖排工具 */
+.sidebar.is-collapsed, .panel.is-collapsed { width: 48px; overflow: hidden; }
+.sidebar.is-collapsed .side-head, .panel.is-collapsed .side-head,
+.sidebar.is-collapsed .page-list, .panel.is-collapsed > *:not(.side-foot):not(.rail-tools) {
+  display: none !important;
+}
+
+.sidebar.is-collapsed .side-foot, .panel.is-collapsed .side-foot {
+  justify-content: center;
+  padding: 0;
+  border-top: 0;
+}
+
+.sidebar.is-collapsed .foot-label, .panel.is-collapsed .foot-label { display: none; }
+
+.rail-tools[hidden] { display: none; }
+.rail-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.rail-tools .tool-group {
+  flex-direction: column;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  gap: 2px;
+}
+
+.rail-tools .tool-group .icon-btn { width: 32px; height: 32px; }
+
+/* 让底栏永远在最后，不被后插入的列表挤到上面 */
+.side-foot { order: 99; flex: 0 0 34px; height: 34px; }
+.page-list { order: 1; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.side-head { order: 0; flex: none; }
+#preview-host, .region-list, .panel > .region-list { order: 1; flex: 1 1 auto; min-height: 0; }
+.rail-tools { order: 0; }
+
 </style>
 </head>
 <body>
@@ -1103,7 +1162,10 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
       <div class="side-head" id="side-head">
         <span class="side-title">页面</span>
       </div>
-      <button type="button" class="rail-toggle" id="rail-left" title="展开左栏" hidden></button>
+      <div class="rail-tools" id="rail-tools" hidden></div>
+      <button type="button" class="side-foot" id="toggle-left" title="收起侧边栏">
+        <span class="foot-icon"></span><span class="foot-label">收起侧边栏</span>
+      </button>
     </aside>
     <div class="splitter" id="split-left" title="拖动调整宽度，双击折叠"></div>
     <div class="canvas" id="canvas">
@@ -1136,7 +1198,9 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
       <div class="side-head" id="panel-head">
         <span class="side-title">标注</span>
       </div>
-      <button type="button" class="rail-toggle is-right" id="rail-right" title="展开右栏" hidden></button>
+      <button type="button" class="side-foot" id="toggle-right" title="收起侧边栏">
+        <span class="foot-icon"></span><span class="foot-label">收起侧边栏</span>
+      </button>
     </aside>
   </main>
   <div class="banner" id="banner" hidden></div>
@@ -1555,8 +1619,9 @@ const ICONS = {
   minus: wrap('<path d="M3.6 8h8.8"/>'),
   plus: wrap('<path d="M8 3.6v8.8M3.6 8h8.8"/>'),
   grid: wrap('<rect x="2.6" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="0.8"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="0.8"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="0.8"/>'),
-  sidebarLeft: wrap('<rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="4.2" y="5" width="3" height="6" rx="0.8" fill="currentColor" stroke="none"/>'),
-  sidebarRight: wrap('<rect x="2" y="3" width="12" height="10" rx="1.6"/><rect x="8.8" y="5" width="3" height="6" rx="0.8" fill="currentColor" stroke="none"/>'),
+  // GTK4 sidebar 图标：竖线 + 箭头（|← 收起 / →| 展开）
+  sidebarLeft: wrap('<path d="M3.5 3v10"/><path d="M13 8H7"/><path d="M9.6 5.4 7 8l2.6 2.6"/>'),
+  sidebarRight: wrap('<path d="M12.5 3v10"/><path d="M3 8h6"/><path d="M6.4 5.4 9 8l-2.6 2.6"/>'),
   columns: wrap('<rect x="2.4" y="2.8" width="4.4" height="10.4" rx="1"/><rect x="9.2" y="2.8" width="4.4" height="10.4" rx="1"/>'),
   fitWidth: wrap('<rect x="2.4" y="3.2" width="4.2" height="9.6" rx="0.6"/><path d="M9 8h4.4M11.6 5.6L13.8 8l-2.2 2.4"/>'),
   fitPage: wrap('<rect x="4" y="2.6" width="8" height="10.8" rx="0.8"/><path d="M6 5.4h4M6 8h4M6 10.6h4"/>'),
@@ -5909,7 +5974,10 @@ function boot(opts = {}) {
     }
   };
 
-  const COLLAPSED_W = 31;
+  const COLLAPSED_W = 48;
+  let leftFoot = null;
+  let rightFoot = null;
+  let railTools = null;
 
   function applyLayout() {
     const root = document.documentElement;
@@ -5927,6 +5995,18 @@ function boot(opts = {}) {
       panel = Math.max(160, Math.floor(panel * k));
     }
     root.style.setProperty('--w-side', (layout.leftCollapsed ? COLLAPSED_W : side) + 'px');
+    // 收起时把 QWE 工具竖排到窄条里
+    if (railTools && toolGroup) {
+      if (layout.leftCollapsed) {
+        railTools.hidden = false;
+        railTools.appendChild(toolGroup);
+      } else {
+        railTools.hidden = true;
+        shell.left.appendChild(toolGroup);
+      }
+    }
+    paintFoot(leftFoot, !!layout.leftCollapsed, 'left');
+    paintFoot(rightFoot, !!layout.rightCollapsed, 'right');
     root.style.setProperty('--w-panel', (layout.rightCollapsed ? COLLAPSED_W : panel) + 'px');
     shell.panelLeft.classList.toggle('is-collapsed', !!layout.leftCollapsed);
     shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
@@ -6033,24 +6113,22 @@ function boot(opts = {}) {
     colsBtn.title = double ? '切回单列' : '切到双列';
   }
 
-  // 折叠按钮：表头里一个，收起后在底角留一个同样的
-  function makeToggle(host, icon, isRight) {
-    if (!host) return null;
-    const btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.className = 'icon-btn toggle-btn';
-    btn.innerHTML = icon;
-    btn.title = isRight ? '收起/展开右栏' : '收起/展开左栏';
-    host.appendChild(btn);
-    return btn;
-  }
+  // 折叠按钮固定在栏底：展开时「|← 收起侧边栏」，收起时只留图标
+  leftFoot = document.getElementById('toggle-left');
+  rightFoot = document.getElementById('toggle-right');
+  railTools = document.getElementById('rail-tools');
 
-  const leftRail = document.getElementById('rail-left');
-  const rightRail = document.getElementById('rail-right');
-  const leftToggle = makeToggle(sideHead, ICONS.sidebarLeft, false);
-  const rightToggle = makeToggle(document.getElementById('panel-head'), ICONS.sidebarRight, true);
-  if (leftRail) leftRail.innerHTML = ICONS.sidebarLeft;
-  if (rightRail) rightRail.innerHTML = ICONS.sidebarRight;
+  function paintFoot(btn, collapsed, side) {
+    if (!btn) return;
+    const icon = side === 'left'
+      ? collapsed ? ICONS.sidebarRight : ICONS.sidebarLeft
+      : collapsed ? ICONS.sidebarLeft : ICONS.sidebarRight;
+    const iconEl = btn.querySelector('.foot-icon');
+    const labelEl = btn.querySelector('.foot-label');
+    if (iconEl) iconEl.innerHTML = icon;
+    if (labelEl) labelEl.textContent = '收起侧边栏';
+    btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+  }
 
   const flipLeft = () => {
     layout.leftCollapsed = !layout.leftCollapsed;
@@ -6064,10 +6142,11 @@ function boot(opts = {}) {
     saveLayout();
     scheduleRefit();
   };
-  if (leftToggle) leftToggle.addEventListener('click', flipLeft);
-  if (rightToggle) rightToggle.addEventListener('click', flipRight);
-  if (leftRail) leftRail.addEventListener('click', flipLeft);
-  if (rightRail) rightRail.addEventListener('click', flipRight);
+  if (leftFoot) leftFoot.addEventListener('click', flipLeft);
+  if (rightFoot) rightFoot.addEventListener('click', flipRight);
+
+  // 首次 applyLayout 时这些按钮还没建好，这里补刷一次
+  applyLayout();
 
   updateColsBtn && updateColsBtn();
 
