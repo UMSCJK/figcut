@@ -15,12 +15,10 @@ test('layout: 单页就是每页一行', () => {
   assert(str(pageCombos(3)) === '1 | 2 | 3');
 });
 
-test('layout: 双页书式第一页单独在右', () => {
-  assert(str(pageCombos(6, { dual: true })) === '1 | 2,3 | 4,5 | 6');
-});
-
-test('layout: 奇数页在左切成 1|2、3|4', () => {
+test('layout: 双页永远两页一行，封面不单独占行', () => {
+  assert(str(pageCombos(6, { dual: true })) === '1,2 | 3,4 | 5,6');
   assert(str(pageCombos(6, { dual: true, oddLeft: true })) === '1,2 | 3,4 | 5,6');
+  assert(str(pageCombos(5, { dual: true })) === '1,2 | 3,4 | 5');
 });
 
 test('layout: 适应页面整页可见（取宽高比里小的那个）', () => {
