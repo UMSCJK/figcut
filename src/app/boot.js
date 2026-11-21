@@ -419,6 +419,7 @@ export function boot(opts = {}) {
   }
 
   function render() {
+    document.documentElement.dataset.empty = state === 'ready' ? '0' : '1';
     clampScrollX();
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
@@ -471,8 +472,10 @@ export function boot(opts = {}) {
     render();
   };
 
-  addButton(shell, 'left', '撤销', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销', icon: ICONS.undo });
-  addButton(shell, 'left', '重做', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做', icon: ICONS.redo });
+  const undoBtn = addButton(shell, 'left', '撤销', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销', icon: ICONS.undo });
+  const redoBtn = addButton(shell, 'left', '重做', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做', icon: ICONS.redo });
+  undoBtn.dataset.role = 'undo';
+  redoBtn.dataset.role = 'redo';
   // 导出设置：边距 / DPI
   const settingsBox = doc.createElement('div');
   settingsBox.className = 'settings-popover';
@@ -518,6 +521,7 @@ export function boot(opts = {}) {
   const settingsBtn = addButton(shell, 'right', '设置', () => {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
+  settingsBtn.dataset.role = 'settings';
   appearanceAnchor = settingsBtn;
 
   // 配色：三个连体按钮（浅UI浅PDF / 深UI浅PDF / 深UI深PDF）
@@ -560,13 +564,14 @@ export function boot(opts = {}) {
     }
   }
 
-  addButton(shell, 'right', '导出', () => doExport(), {
+  const exportBtn = addButton(shell, 'right', '导出', () => doExport(), {
     title: '导出 ZIP (Ctrl+E)',
     ariaLabel: '导出',
     kind: 'btn',
     suggested: true,
     icon: ICONS.export,
   });
+  exportBtn.dataset.role = 'export';
 
   // 浮动工具组：画布左上
   // 工具组放进顶栏（撤销/重做右边），不跟画布一起滚
@@ -1121,6 +1126,7 @@ export function boot(opts = {}) {
     persist(true); // 打开新文件前先落上一份
     state = 'loading';
     setEmpty(shell, false);
+    document.documentElement.dataset.empty = '0';
     setTitle(shell, file.name);
     try {
       const doc = await openFile(file, opts);
@@ -1179,6 +1185,7 @@ export function boot(opts = {}) {
       state = 'error';
       toast('打开失败：' + (e && e.message ? e.message : e));
       setEmpty(shell, true);
+      document.documentElement.dataset.empty = '1';
     }
   };
 
@@ -1344,6 +1351,7 @@ export function boot(opts = {}) {
     shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
   }
   applyLayout();
+  document.documentElement.dataset.empty = '1'; // 启动即空状态
 
   function bindSplitter(el, side) {
     if (!el) return;

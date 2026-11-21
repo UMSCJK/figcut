@@ -751,24 +751,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 侧栏折叠按钮 */
 .sidebar, .panel { position: relative; }
 
-.side-toggle {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  z-index: 3;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--card);
-  color: var(--text-2);
-  font: inherit;
-  line-height: 1;
-  box-shadow: var(--shadow-1);
-}
-
-.side-toggle:hover { background: var(--hover); color: var(--text); }
-.side-toggle.is-right { left: auto; right: 6px; }
 
 
 /* 顶栏内联的导出设置 */
@@ -1008,24 +990,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .side-head .side-title { flex: 1; min-width: 0; }
 .side-head .toggle-btn { flex: none; }
 
-.rail-toggle {
-  position: absolute;
-  left: 4px;
-  bottom: 6px;
-  z-index: 5;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.rail-toggle:hover { background: var(--hover); color: var(--text); }
-.rail-toggle.is-right { left: auto; right: 4px; }
 
 /* ---------- 全屏查看器 ---------- */
 .lightbox-inner {
@@ -1174,6 +1138,38 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 右栏给控件留出可读宽度 */
 .region-row { grid-template-columns: 10px 56px minmax(0, 1fr) auto; }
 .region-thumb { width: 56px; }
+
+/* 折叠按钮永远钉在角落（绝对定位，不随内容流走） */
+.sidebar, .panel { position: relative; padding-bottom: 54px; }
+
+.side-foot {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  width: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  z-index: 6;
+}
+
+/* 空状态：只留「打开」和最近文件，工具/侧栏内容全部收起 */
+:root[data-empty="1"] .tool-group,
+:root[data-empty="1"] .zoom-control,
+:root[data-empty="1"] .side-head,
+:root[data-empty="1"] #panel-right > :not(.side-foot):not(.side-head),
+:root[data-empty="1"] #panel-left > .page-list { display: none !important; }
+
+:root[data-empty="1"] .sidebar, :root[data-empty="1"] .panel { padding-bottom: 0; }
+:root[data-empty="1"] .side-foot { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+
+/* 空状态只留「打开」和配色 */
+:root[data-empty="1"] [data-role="undo"],
+:root[data-empty="1"] [data-role="redo"],
+:root[data-empty="1"] [data-role="settings"],
+:root[data-empty="1"] [data-role="export"] { display: none !important; }
 
 </style>
 </head>
@@ -5133,6 +5129,7 @@ function boot(opts = {}) {
   }
 
   function render() {
+    document.documentElement.dataset.empty = state === 'ready' ? '0' : '1';
     clampScrollX();
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
@@ -5185,8 +5182,10 @@ function boot(opts = {}) {
     render();
   };
 
-  addButton(shell, 'left', '撤销', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销', icon: ICONS.undo });
-  addButton(shell, 'left', '重做', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做', icon: ICONS.redo });
+  const undoBtn = addButton(shell, 'left', '撤销', undoUi, { title: '撤销 (Ctrl+Z)', ariaLabel: '撤销', icon: ICONS.undo });
+  const redoBtn = addButton(shell, 'left', '重做', redoUi, { title: '重做 (Ctrl+Y)', ariaLabel: '重做', icon: ICONS.redo });
+  undoBtn.dataset.role = 'undo';
+  redoBtn.dataset.role = 'redo';
   // 导出设置：边距 / DPI
   const settingsBox = doc.createElement('div');
   settingsBox.className = 'settings-popover';
@@ -5232,6 +5231,7 @@ function boot(opts = {}) {
   const settingsBtn = addButton(shell, 'right', '设置', () => {
     settingsBox.hidden = !settingsBox.hidden;
   }, { title: '导出设置：边距 / DPI', ariaLabel: '导出设置', icon: ICONS.settings });
+  settingsBtn.dataset.role = 'settings';
   appearanceAnchor = settingsBtn;
 
   // 配色：三个连体按钮（浅UI浅PDF / 深UI浅PDF / 深UI深PDF）
@@ -5274,13 +5274,14 @@ function boot(opts = {}) {
     }
   }
 
-  addButton(shell, 'right', '导出', () => doExport(), {
+  const exportBtn = addButton(shell, 'right', '导出', () => doExport(), {
     title: '导出 ZIP (Ctrl+E)',
     ariaLabel: '导出',
     kind: 'btn',
     suggested: true,
     icon: ICONS.export,
   });
+  exportBtn.dataset.role = 'export';
 
   // 浮动工具组：画布左上
   // 工具组放进顶栏（撤销/重做右边），不跟画布一起滚
@@ -5835,6 +5836,7 @@ function boot(opts = {}) {
     persist(true); // 打开新文件前先落上一份
     state = 'loading';
     setEmpty(shell, false);
+    document.documentElement.dataset.empty = '0';
     setTitle(shell, file.name);
     try {
       const doc = await openFile(file, opts);
@@ -5893,6 +5895,7 @@ function boot(opts = {}) {
       state = 'error';
       toast('打开失败：' + (e && e.message ? e.message : e));
       setEmpty(shell, true);
+      document.documentElement.dataset.empty = '1';
     }
   };
 
@@ -6058,6 +6061,7 @@ function boot(opts = {}) {
     shell.panelRight.classList.toggle('is-collapsed', !!layout.rightCollapsed);
   }
   applyLayout();
+  document.documentElement.dataset.empty = '1'; // 启动即空状态
 
   function bindSplitter(el, side) {
     if (!el) return;
