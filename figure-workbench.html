@@ -1550,6 +1550,13 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 缩略图列表：条目不参与 flex 收缩，否则会被压扁 */
 .page-list > .page-item { flex: 0 0 auto; }
 
+/* 左栏双列：行高对齐、不裁切 */
+.page-list.is-double { align-content: start; align-items: stretch; }
+.page-list.is-double .page-item { overflow: visible; }
+
+/* 画布顶部留白别太大 */
+.pages { padding-top: 20px; }
+
 </style>
 </head>
 <body>
@@ -1747,15 +1754,8 @@ function pageCombos(pageCount, opts = {}) {
     return rows;
   }
 
-  if (oddLeft) {
-    for (let p = 1; p <= pageCount; p += 2) {
-      rows.push(p + 1 <= pageCount ? [p, p + 1] : [p]);
-    }
-    return rows;
-  }
-
-  if (pageCount >= 1) rows.push([1]);
-  for (let p = 2; p <= pageCount; p += 2) {
+  // 不再让封面单独占一行：永远 (1,2) (3,4)…；oddLeft 只决定奇偶页左右
+  for (let p = 1; p <= pageCount; p += 2) {
     rows.push(p + 1 <= pageCount ? [p, p + 1] : [p]);
   }
   return rows;
@@ -2585,11 +2585,9 @@ function createPageStack(opts) {
       const rowEl = doc.createElement('div');
       rowEl.className = 'page-row';
       rowEl.dataset.row = String(i);
-      // 书式：第 1 页单独在右，末页落单在左，别和双页行错开
-      if (view.dual && row.length === 1) {
-        rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
-      }
-      for (const no of row) {
+      // 双页时按 oddLeft 决定谁在左（不再有单独封面页）
+      const order = view.dual && !view.oddLeft && row.length === 2 ? [row[1], row[0]] : row;
+      for (const no of order) {
         const p = pages[no - 1];
         if (p) rowEl.appendChild(p.wrap);
       }
@@ -5667,12 +5665,6 @@ function boot(opts = {}) {
   ]));
   menu.appendChild(sepLine());
 
-  const dpiRow = menuRow('导出分辨率', settings.dpi, 'dpi');
-  const marginRow = menuRow('导出边距', settings.margin, 'margin');
-  menu.appendChild(dpiRow.el);
-  menu.appendChild(marginRow.el);
-  menu.appendChild(sepLine());
-
   const rowContinuous = menuRow('连续滚动', 'C', null, () => { setContinuous(!stack.view.continuous); closeMenu(); });
   const rowDual = menuRow('双页模式', 'D', null, () => { setDual(!stack.view.dual); closeMenu(); });
   const rowOdd = menuRow('奇数页在左', 'O', null, () => { if (!stack.view.dual) return; setOddLeft(!stack.view.oddLeft); closeMenu(); });
@@ -5680,6 +5672,12 @@ function boot(opts = {}) {
   menu.appendChild(rowDual.el);
   menu.appendChild(rowOdd.el);
   menu.appendChild(sepLine());
+
+  // 导出参数紧贴「导出 ZIP」
+  const dpiRow = menuRow('导出分辨率', settings.dpi, 'dpi');
+  const marginRow = menuRow('导出边距', settings.margin, 'margin');
+  menu.appendChild(dpiRow.el);
+  menu.appendChild(marginRow.el);
   menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
   document.body.appendChild(menu);
@@ -5747,20 +5745,27 @@ function boot(opts = {}) {
     return { el, input };
   }
 
+  function saveView() {
+    layout.view = { dual: stack.view.dual, oddLeft: stack.view.oddLeft, continuous: stack.view.continuous };
+    saveLayout();
+  }
+
   function setContinuous(next) {
     stack.applyLayout({ continuous: !!next });
+    saveView();
     syncMenu();
   }
 
   function setDual(next) {
-    const on = !!next;
-    stack.applyLayout({ dual: on, oddLeft: on ? stack.view.oddLeft : false });
+    stack.applyLayout({ dual: !!next });
+    saveView();
     syncMenu();
   }
 
   function setOddLeft(next) {
     if (!stack.view.dual) return;
     stack.applyLayout({ oddLeft: !!next });
+    saveView();
     syncMenu();
   }
 
@@ -6410,7 +6415,12 @@ function boot(opts = {}) {
       currentName = file.name;
       // 默认双页（奇数页在左）；窄屏默认单页，避免两页并排溢出
       const narrow = window.innerWidth < 720;
-      stack.applyLayout({ dual: !narrow, oddLeft: true });
+      const savedView = layout.view || {};
+      stack.applyLayout({
+        dual: savedView.dual !== undefined ? !!savedView.dual : !narrow,
+        oddLeft: savedView.oddLeft !== undefined ? !!savedView.oddLeft : true,
+        continuous: savedView.continuous !== undefined ? !!savedView.continuous : true,
+      });
       const n = await stack.mount(doc);
 
       overlays.clear();

@@ -1478,3 +1478,10 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 缩略图列表：条目不参与 flex 收缩，否则会被压扁 */
 .page-list > .page-item { flex: 0 0 auto; }
+
+/* 左栏双列：行高对齐、不裁切 */
+.page-list.is-double { align-content: start; align-items: stretch; }
+.page-list.is-double .page-item { overflow: visible; }
+
+/* 画布顶部留白别太大 */
+.pages { padding-top: 20px; }

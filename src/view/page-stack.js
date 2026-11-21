@@ -125,11 +125,9 @@ export function createPageStack(opts) {
       const rowEl = doc.createElement('div');
       rowEl.className = 'page-row';
       rowEl.dataset.row = String(i);
-      // 书式：第 1 页单独在右，末页落单在左，别和双页行错开
-      if (view.dual && row.length === 1) {
-        rowEl.dataset.single = row[0] === 1 ? 'right' : 'left';
-      }
-      for (const no of row) {
+      // 双页时按 oddLeft 决定谁在左（不再有单独封面页）
+      const order = view.dual && !view.oddLeft && row.length === 2 ? [row[1], row[0]] : row;
+      for (const no of order) {
         const p = pages[no - 1];
         if (p) rowEl.appendChild(p.wrap);
       }

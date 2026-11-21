@@ -570,12 +570,6 @@ export function boot(opts = {}) {
   ]));
   menu.appendChild(sepLine());
 
-  const dpiRow = menuRow('导出分辨率', settings.dpi, 'dpi');
-  const marginRow = menuRow('导出边距', settings.margin, 'margin');
-  menu.appendChild(dpiRow.el);
-  menu.appendChild(marginRow.el);
-  menu.appendChild(sepLine());
-
   const rowContinuous = menuRow('连续滚动', 'C', null, () => { setContinuous(!stack.view.continuous); closeMenu(); });
   const rowDual = menuRow('双页模式', 'D', null, () => { setDual(!stack.view.dual); closeMenu(); });
   const rowOdd = menuRow('奇数页在左', 'O', null, () => { if (!stack.view.dual) return; setOddLeft(!stack.view.oddLeft); closeMenu(); });
@@ -583,6 +577,12 @@ export function boot(opts = {}) {
   menu.appendChild(rowDual.el);
   menu.appendChild(rowOdd.el);
   menu.appendChild(sepLine());
+
+  // 导出参数紧贴「导出 ZIP」
+  const dpiRow = menuRow('导出分辨率', settings.dpi, 'dpi');
+  const marginRow = menuRow('导出边距', settings.margin, 'margin');
+  menu.appendChild(dpiRow.el);
+  menu.appendChild(marginRow.el);
   menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
   document.body.appendChild(menu);
@@ -650,20 +650,27 @@ export function boot(opts = {}) {
     return { el, input };
   }
 
+  function saveView() {
+    layout.view = { dual: stack.view.dual, oddLeft: stack.view.oddLeft, continuous: stack.view.continuous };
+    saveLayout();
+  }
+
   function setContinuous(next) {
     stack.applyLayout({ continuous: !!next });
+    saveView();
     syncMenu();
   }
 
   function setDual(next) {
-    const on = !!next;
-    stack.applyLayout({ dual: on, oddLeft: on ? stack.view.oddLeft : false });
+    stack.applyLayout({ dual: !!next });
+    saveView();
     syncMenu();
   }
 
   function setOddLeft(next) {
     if (!stack.view.dual) return;
     stack.applyLayout({ oddLeft: !!next });
+    saveView();
     syncMenu();
   }
 
@@ -1313,7 +1320,12 @@ export function boot(opts = {}) {
       currentName = file.name;
       // 默认双页（奇数页在左）；窄屏默认单页，避免两页并排溢出
       const narrow = window.innerWidth < 720;
-      stack.applyLayout({ dual: !narrow, oddLeft: true });
+      const savedView = layout.view || {};
+      stack.applyLayout({
+        dual: savedView.dual !== undefined ? !!savedView.dual : !narrow,
+        oddLeft: savedView.oddLeft !== undefined ? !!savedView.oddLeft : true,
+        continuous: savedView.continuous !== undefined ? !!savedView.continuous : true,
+      });
       const n = await stack.mount(doc);
 
       overlays.clear();

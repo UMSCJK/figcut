@@ -20,15 +20,8 @@ export function pageCombos(pageCount, opts = {}) {
     return rows;
   }
 
-  if (oddLeft) {
-    for (let p = 1; p <= pageCount; p += 2) {
-      rows.push(p + 1 <= pageCount ? [p, p + 1] : [p]);
-    }
-    return rows;
-  }
-
-  if (pageCount >= 1) rows.push([1]);
-  for (let p = 2; p <= pageCount; p += 2) {
+  // 不再让封面单独占一行：永远 (1,2) (3,4)…；oddLeft 只决定奇偶页左右
+  for (let p = 1; p <= pageCount; p += 2) {
     rows.push(p + 1 <= pageCount ? [p, p + 1] : [p]);
   }
   return rows;
