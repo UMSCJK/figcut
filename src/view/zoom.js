@@ -52,6 +52,16 @@ export function setFit(z, mode, dims) {
   return z.scale;
 }
 
+// 直接给定适应后的比例（调用方已按列数算好），只负责落状态 + 通知
+export function setFitAt(z, mode, scale) {
+  z.auto = false;
+  z.mode = mode;
+  const next = clamp(Number(scale), z.min, z.max);
+  z.scale = next;
+  notify(z);
+  return next;
+}
+
 // 以指针为锚点缩放的滚动补偿：指针下的内容不许漂。
 export function anchorAt(scroll, px, py, from, to) {
   if (!(from > 0) || !(to > 0)) return { x: scroll.x, y: scroll.y };

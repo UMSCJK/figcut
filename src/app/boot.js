@@ -2,7 +2,7 @@
 // 状态：已实现（打开 PDF、连续滚动、缩放、矩形/多边形标注、撤销重做）。
 
 import { createShell, setTitle, setEmpty, addButton, addButtonTo } from '../ui/shell.js';
-import { createZoom, subscribe, setScale, setFit, anchorAt } from '../view/zoom.js';
+import { createZoom, subscribe, setScale, setFit, setFitAt, anchorAt } from '../view/zoom.js';
 import { fitPageScale, fitWidthScale } from '../core/layout.js';
 import { bindShortcuts, nudgeVector } from '../app/shortcuts.js';
 import { pageAtScroll } from '../view/navigator.js';
@@ -696,17 +696,17 @@ export function boot(opts = {}) {
     fitPageMode = true;
     stack.root.classList.remove('is-fitpage');
     stack.root.style.removeProperty('--fit-extra');
-    setFit(zoom, 'page', fitDims());
+    setFitAt(zoom, 'page', computeFit('page'));
   }
 
   function doFitWidth() {
     fitPageMode = false;
     stack.root.classList.remove('is-fitpage');
-    setFit(zoom, 'width', fitDims());
+    setFitAt(zoom, 'width', computeFit('width'));
   }
 
   function stepZoomBy(dir) {
-    const list = stepList(fitWidthScale(fitDims()));
+    const list = stepList(computeFit('width'));
     const i = stepIndex(zoom.scale, list);
     setScale(zoom, list[Math.min(list.length - 1, Math.max(0, i + dir))]);
   }
@@ -885,7 +885,7 @@ export function boot(opts = {}) {
 
   // 键盘缩放和滚轮/按钮共用同一张表（预设 + 实时页宽）
   function stepZoomTo(dir) {
-    const list = stepList(fitWidthScale(fitDims()));
+    const list = stepList(computeFit('width'));
     const i = stepIndex(zoom.scale, list);
     setScale(zoom, list[Math.min(list.length - 1, Math.max(0, i + dir))]);
   }
@@ -1259,7 +1259,7 @@ export function boot(opts = {}) {
     const dir = wheelAcc < 0 ? 1 : -1;
     wheelAcc = 0;
     // 档位表 = 预设 + 实时页宽比例，绝不会停在 143% 这种半吊子值
-    const list = stepList(fitWidthScale(fitDims()));
+    const list = stepList(computeFit('width'));
     const i = stepIndex(from, list);
     const to = list[Math.min(list.length - 1, Math.max(0, i + dir))];
     if (Math.abs(to - from) < 1e-6) return;
@@ -1278,7 +1278,7 @@ export function boot(opts = {}) {
     if (!ev.ctrlKey && !ev.metaKey && !stack.view.continuous) {
       ev.preventDefault();
       const now = Date.now();
-      if (Math.abs(ev.deltaY) < 8 || now - pageWheelAt < 260) return;
+      if (Math.abs(ev.deltaY) < 1 || now - pageWheelAt < 150) return;
       pageWheelAt = now;
       goPage(ed.page + (ev.deltaY > 0 ? 1 : -1));
       return;
@@ -1391,7 +1391,7 @@ export function boot(opts = {}) {
   function refitIfNeeded() {
     if (!(zoom.auto || zoom.mode === 'width')) return;
     const auto = zoom.auto;
-    setFit(zoom, 'width', fitDims());
+    setFitAt(zoom, 'width', computeFit('width'));
     zoom.auto = auto;
   }
 

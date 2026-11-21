@@ -1846,6 +1846,16 @@ function setFit(z, mode, dims) {
   return z.scale;
 }
 
+// 直接给定适应后的比例（调用方已按列数算好），只负责落状态 + 通知
+function setFitAt(z, mode, scale) {
+  z.auto = false;
+  z.mode = mode;
+  const next = clamp(Number(scale), z.min, z.max);
+  z.scale = next;
+  notify(z);
+  return next;
+}
+
 // 以指针为锚点缩放的滚动补偿：指针下的内容不许漂。
 function anchorAt(scroll, px, py, from, to) {
   if (!(from > 0) || !(to > 0)) return { x: scroll.x, y: scroll.y };
@@ -5791,17 +5801,17 @@ function boot(opts = {}) {
     fitPageMode = true;
     stack.root.classList.remove('is-fitpage');
     stack.root.style.removeProperty('--fit-extra');
-    setFit(zoom, 'page', fitDims());
+    setFitAt(zoom, 'page', computeFit('page'));
   }
 
   function doFitWidth() {
     fitPageMode = false;
     stack.root.classList.remove('is-fitpage');
-    setFit(zoom, 'width', fitDims());
+    setFitAt(zoom, 'width', computeFit('width'));
   }
 
   function stepZoomBy(dir) {
-    const list = stepList(fitWidthScale(fitDims()));
+    const list = stepList(computeFit('width'));
     const i = stepIndex(zoom.scale, list);
     setScale(zoom, list[Math.min(list.length - 1, Math.max(0, i + dir))]);
   }
@@ -5980,7 +5990,7 @@ function boot(opts = {}) {
 
   // 键盘缩放和滚轮/按钮共用同一张表（预设 + 实时页宽）
   function stepZoomTo(dir) {
-    const list = stepList(fitWidthScale(fitDims()));
+    const list = stepList(computeFit('width'));
     const i = stepIndex(zoom.scale, list);
     setScale(zoom, list[Math.min(list.length - 1, Math.max(0, i + dir))]);
   }
@@ -6354,7 +6364,7 @@ function boot(opts = {}) {
     const dir = wheelAcc < 0 ? 1 : -1;
     wheelAcc = 0;
     // 档位表 = 预设 + 实时页宽比例，绝不会停在 143% 这种半吊子值
-    const list = stepList(fitWidthScale(fitDims()));
+    const list = stepList(computeFit('width'));
     const i = stepIndex(from, list);
     const to = list[Math.min(list.length - 1, Math.max(0, i + dir))];
     if (Math.abs(to - from) < 1e-6) return;
@@ -6373,7 +6383,7 @@ function boot(opts = {}) {
     if (!ev.ctrlKey && !ev.metaKey && !stack.view.continuous) {
       ev.preventDefault();
       const now = Date.now();
-      if (Math.abs(ev.deltaY) < 8 || now - pageWheelAt < 260) return;
+      if (Math.abs(ev.deltaY) < 1 || now - pageWheelAt < 150) return;
       pageWheelAt = now;
       goPage(ed.page + (ev.deltaY > 0 ? 1 : -1));
       return;
@@ -6486,7 +6496,7 @@ function boot(opts = {}) {
   function refitIfNeeded() {
     if (!(zoom.auto || zoom.mode === 'width')) return;
     const auto = zoom.auto;
-    setFit(zoom, 'width', fitDims());
+    setFitAt(zoom, 'width', computeFit('width'));
     zoom.auto = auto;
   }
 
