@@ -574,7 +574,7 @@ export function boot(opts = {}) {
   menu.appendChild(menuRow('双页模式', 'D', null, () => { stack.applyLayout({ dual: !stack.view.dual }); closeMenu(); }).el);
   menu.appendChild(menuRow('奇数页在左', 'O', null, () => { stack.applyLayout({ oddLeft: !stack.view.oddLeft }); closeMenu(); }).el);
   menu.appendChild(sepLine());
-  menu.appendChild(menuRow('适应页宽', 'S', null, () => { setFit(zoom, 'width', fitDims()); closeMenu(); }).el);
+  menu.appendChild(menuRow('适应页宽', 'S', null, () => { doFitWidth(); closeMenu(); }).el);
   menu.appendChild(menuRow('适应页面', 'F', null, () => { doFitPage(); closeMenu(); }).el);
   menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
@@ -634,10 +634,31 @@ export function boot(opts = {}) {
 
   let fitPageMode = false;
 
+  // 页面比视口矮时，用留白把下一行推下去，避免露出下一页的页眉
+  function updateFitSpacing() {
+    if (!fitPageMode) return;
+    const ov = overlays.get(ed.page);
+    const pageH = ov ? ov.size.h : ed.pageH;
+    const root = stack.root;
+    const cs = getComputedStyle(root);
+    // 滚到当前行时行顶贴着视口顶部，所以直接按视口高算：
+    // extra 让「页高 + 行间距 + extra」超出视口，下一行就看不见了
+    const need = root.clientHeight - pageH * zoom.scale - PAGE_GAP;
+    const extra = Math.max(0, Math.ceil(need) + 1);
+    root.style.setProperty('--fit-extra', extra + 'px');
+    root.classList.add('is-fitpage');
+  }
+
   function doFitPage() {
     fitPageMode = true;
-    stack.applyLayout({ continuous: false });
     setFit(zoom, 'page', fitDims());
+    updateFitSpacing();
+  }
+
+  function doFitWidth() {
+    fitPageMode = false;
+    stack.root.classList.remove('is-fitpage');
+    setFit(zoom, 'width', fitDims());
   }
 
   function stepZoomBy(dir) {
@@ -826,27 +847,40 @@ export function boot(opts = {}) {
   }
 
   // ---- 快捷键：统一走 app/shortcuts 的键表 ----
-  const fitDims = () => {
-    const ov = overlays.get(ed.page);
+  // 视图可用区域（扣掉 padding 与滚动条）
+  function viewportBox() {
     const el = stack.root;
     const cs = getComputedStyle(el);
     const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
     const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-    // 扣掉 padding 与滚动条，这样"适应宽度"不会撑出横向滚动条
     const scrollX = el.offsetWidth - el.clientWidth;
     const scrollY = el.offsetHeight - el.clientHeight;
-    let vw = Math.max(1, el.clientWidth - padX - scrollX);
-    // 双页并排时「适应页宽」要按半宽算，否则两页加起来必定溢出
-    if (stack.view.dual) vw = Math.max(60, vw - 20) / 2;
     return {
-      viewportW: Math.max(1, vw),
-      viewportH: Math.max(1, el.clientHeight - padY - scrollY),
-      pageW: ov ? ov.size.w : ed.pageW,
-      pageH: ov ? ov.size.h : ed.pageH,
-      padX: 0,
-      padY: 0,
+      w: Math.max(1, el.clientWidth - padX - scrollX),
+      h: Math.max(1, el.clientHeight - padY - scrollY),
     };
-  };
+  }
+
+  const PAGE_GAP = 20;
+
+  // 适应：width = 整栏宽度塞满；page = 一页完整放进视口（双页时两页并排也要塞满宽度）
+  function computeFit(mode) {
+    const ov = overlays.get(ed.page);
+    const pageW = ov ? ov.size.w : ed.pageW;
+    const pageH = ov ? ov.size.h : ed.pageH;
+    const box = viewportBox();
+    const cols = stack.view.dual ? 2 : 1;
+    const usableW = Math.max(60, box.w - PAGE_GAP * (cols - 1));
+    const wScale = usableW / (pageW * cols);
+    const hScale = box.h / pageH;
+    const raw = mode === 'width' ? wScale : Math.min(wScale, hScale);
+    // 留 1px 余量，避免四舍五入后正好溢出触发滚动条
+    const safe = Math.floor((raw - 0.0015) * 1000) / 1000;
+    return Math.max(0.05, Math.min(8, safe));
+  }
+
+  // 兼容旧调用点
+  const fitDims = () => ({ viewportW: viewportBox().w, viewportH: viewportBox().h, pageW: ed.pageW, pageH: ed.pageH, padX: 0, padY: 0 });
 
   // ---- 缩略图全屏查看 ----
   const lb = document.getElementById('lightbox');
@@ -1131,8 +1165,8 @@ export function boot(opts = {}) {
     'zoom.in': () => stepZoomTo(1),
     'zoom.out': () => stepZoomTo(-1),
     'zoom.reset': () => setScale(zoom, 1),
-    'zoom.fitPage': () => setFit(zoom, 'width', fitDims()),
-    'zoom.fitWidth': () => setFit(zoom, 'width', fitDims()),
+    'zoom.fitPage': () => doFitPage(),
+    'zoom.fitWidth': () => doFitWidth(),
     'history.undo': undoUi,
     'history.redo': redoUi,
     'export.zip': () => doExport(),
@@ -1227,7 +1261,9 @@ export function boot(opts = {}) {
       const doc = await openFile(file, opts);
       currentDoc = doc;
       currentName = file.name;
-      stack.applyLayout({ dual: true, oddLeft: true }); // 默认双页、奇数页在左
+      // 默认双页（奇数页在左）；窄屏默认单页，避免两页并排溢出
+      const narrow = window.innerWidth < 720;
+      stack.applyLayout({ dual: !narrow, oddLeft: true });
       const n = await stack.mount(doc);
 
       overlays.clear();
@@ -1260,9 +1296,11 @@ export function boot(opts = {}) {
         hist.present = snapshot();
       }
 
-      // 手机上先给「适应页宽」，不然 A4 一屏放不下还得左右拖
-      if (typeof window !== 'undefined' && window.innerWidth < 720 && zoom.mode === 'free') {
-        setFit(zoom, 'width', fitDims());
+      // 默认缩放：横屏（宽 >= 高）适应整页，竖屏适应宽度
+      if (zoom.mode === 'free') {
+        const landscape = window.innerWidth >= window.innerHeight;
+        if (landscape) doFitPage();
+        else doFitWidth();
       }
       render();
       pageMask(1); // 预热首页掩膜
@@ -1306,9 +1344,13 @@ export function boot(opts = {}) {
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => {
-    if (fitPageMode && zoom.mode !== 'page') {
-      fitPageMode = false;
-      stack.applyLayout({ continuous: true });
+    if (fitPageMode) {
+      if (zoom.mode === 'page') updateFitSpacing();
+      else {
+        fitPageMode = false;
+        stack.root.classList.remove('is-fitpage');
+        stack.root.style.removeProperty('--fit-extra');
+      }
     }
     stack.setVisualScale(zoom.scale);
     stack.scheduleZoom();

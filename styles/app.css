@@ -1408,3 +1408,6 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
 }
+
+/* 适应页面：当前行下面垫出空白，下一行不会露头 */
+.pages.is-fitpage .page-row { margin-bottom: var(--fit-extra, 0px); }
