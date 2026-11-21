@@ -419,7 +419,7 @@ export function boot(opts = {}) {
   }
 
   function render() {
-    document.documentElement.dataset.empty = state === 'ready' ? '0' : '1';
+    document.documentElement.dataset.empty = state === 'ready' && stack.pages.length > 0 ? '0' : '1';
     clampScrollX();
     for (const [page, ov] of overlays) {
       drawRegions(ov, regionsOfPage(ed.regions, page), {
@@ -1181,6 +1181,7 @@ export function boot(opts = {}) {
         file.arrayBuffer().then((buf) => cacheBytes(file.name, file.size, buf)).catch(() => {});
       }
       state = 'ready';
+      document.documentElement.dataset.empty = '0'; // 打开后控件该回来了
     } catch (e) {
       state = 'error';
       toast('打开失败：' + (e && e.message ? e.message : e));
