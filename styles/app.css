@@ -1485,3 +1485,22 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 画布顶部留白别太大 */
 .pages { padding-top: 20px; }
+
+/* 主题选择：勾标贴右下并压在圆边（照 GNOME Text Editor） */
+.sw-badge {
+  left: auto;
+  top: auto;
+  right: -3px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  font-size: 9px;
+}
+
+.sw.is-on .sw-badge { display: block; }
+
+/* 跟随系统的圆：白底 + 左下角黑楔形 */
+.sw-follow { background-image: linear-gradient(to bottom left, #fff 49.99%, #202020 50.01%); }

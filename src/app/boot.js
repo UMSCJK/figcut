@@ -510,9 +510,10 @@ export function boot(opts = {}) {
   menu.className = 'gtk-menu';
   menu.hidden = true;
 
+  // 顺序照 editor-theme-selector.ui：follow / light / dark
   const APPEARANCES = [
+    { ui: 'system', pdf: 'auto', cls: 'follow', title: '跟随系统' },
     { ui: 'light', pdf: 'normal', cls: 'light', title: '浅色界面 · 浅色 PDF' },
-    { ui: 'dark', pdf: 'normal', cls: 'follow', title: '深色界面 · 浅色 PDF' },
     { ui: 'dark', pdf: 'invert', cls: 'dark', title: '深色界面 · 深色 PDF' },
   ];
   const themeRow = doc.createElement('div');
@@ -679,7 +680,9 @@ export function boot(opts = {}) {
     const inv = isInverted(theme, prefersDark());
     for (const { sw, item } of swatches) {
       // 白 / 混合 / 黑 三态各自对应一组 (ui, pdf)
-      const active = resolvedUi(theme, prefersDark()) === item.ui && isInverted(theme, prefersDark()) === (item.pdf === 'invert');
+      const active = item.ui === 'system'
+        ? (theme.ui || 'system') === 'system'
+        : (theme.ui || 'system') === item.ui;
       sw.classList.toggle('is-on', active);
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';

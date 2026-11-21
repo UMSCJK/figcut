@@ -1557,6 +1557,25 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 /* 画布顶部留白别太大 */
 .pages { padding-top: 20px; }
 
+/* 主题选择：勾标贴右下并压在圆边（照 GNOME Text Editor） */
+.sw-badge {
+  left: auto;
+  top: auto;
+  right: -3px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  font-size: 9px;
+}
+
+.sw.is-on .sw-badge { display: block; }
+
+/* 跟随系统的圆：白底 + 左下角黑楔形 */
+.sw-follow { background-image: linear-gradient(to bottom left, #fff 49.99%, #202020 50.01%); }
+
 </style>
 </head>
 <body>
@@ -5615,9 +5634,10 @@ function boot(opts = {}) {
   menu.className = 'gtk-menu';
   menu.hidden = true;
 
+  // 顺序照 editor-theme-selector.ui：follow / light / dark
   const APPEARANCES = [
+    { ui: 'system', pdf: 'auto', cls: 'follow', title: '跟随系统' },
     { ui: 'light', pdf: 'normal', cls: 'light', title: '浅色界面 · 浅色 PDF' },
-    { ui: 'dark', pdf: 'normal', cls: 'follow', title: '深色界面 · 浅色 PDF' },
     { ui: 'dark', pdf: 'invert', cls: 'dark', title: '深色界面 · 深色 PDF' },
   ];
   const themeRow = doc.createElement('div');
@@ -5784,7 +5804,9 @@ function boot(opts = {}) {
     const inv = isInverted(theme, prefersDark());
     for (const { sw, item } of swatches) {
       // 白 / 混合 / 黑 三态各自对应一组 (ui, pdf)
-      const active = resolvedUi(theme, prefersDark()) === item.ui && isInverted(theme, prefersDark()) === (item.pdf === 'invert');
+      const active = item.ui === 'system'
+        ? (theme.ui || 'system') === 'system'
+        : (theme.ui || 'system') === item.ui;
       sw.classList.toggle('is-on', active);
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';
