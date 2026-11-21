@@ -659,25 +659,22 @@ export function boot(opts = {}) {
 
   let fitPageMode = false;
 
-  // 页面比视口矮时，用留白把下一行推下去，避免露出下一页的页眉
-  function updateFitSpacing() {
-    if (!fitPageMode) return;
-    const ov = overlays.get(ed.page);
-    const pageH = ov ? ov.size.h : ed.pageH;
-    const root = stack.root;
-    const cs = getComputedStyle(root);
-    // 滚到当前行时行顶贴着视口顶部，所以直接按视口高算：
-    // extra 让「页高 + 行间距 + extra」超出视口，下一行就看不见了
-    const need = root.clientHeight - pageH * zoom.scale - PAGE_GAP;
-    const extra = Math.max(0, Math.ceil(need) + 1);
-    root.style.setProperty('--fit-extra', extra + 'px');
-    root.classList.add('is-fitpage');
-  }
+  let dualBeforeFitPage = null;
 
   function doFitPage() {
+    // 适应整页 = 单页撑满高度（暂存原来的双页设置，离开时恢复）
+    if (!fitPageMode) dualBeforeFitPage = stack.view.dual;
     fitPageMode = true;
+    stack.applyLayout({ dual: false });
+    stack.root.style.removeProperty('--fit-extra');
+    stack.root.classList.add('is-fitpage'); // 缩紧上下内边距，页面才能占满高度
     setFit(zoom, 'page', fitDims());
-    updateFitSpacing();
+    // 内边距变了，把当前页对齐到顶部
+    requestAnimationFrame(() => {
+      const cur = stack.root.querySelector('.page-row.is-current');
+      if (!cur) return;
+      stack.root.scrollTop = Math.max(0, cur.offsetTop - 8);
+    });
   }
 
   function doFitWidth() {
@@ -1369,13 +1366,11 @@ export function boot(opts = {}) {
   applyColors();
   acceptDrop(shell.canvas, (file) => load(file));
   subscribe(zoom, () => {
-    if (fitPageMode) {
-      if (zoom.mode === 'page') updateFitSpacing();
-      else {
-        fitPageMode = false;
-        stack.root.classList.remove('is-fitpage');
-        stack.root.style.removeProperty('--fit-extra');
-      }
+    if (fitPageMode && zoom.mode !== 'page') {
+      fitPageMode = false;
+      stack.root.classList.remove('is-fitpage');
+      if (dualBeforeFitPage !== null) stack.applyLayout({ dual: dualBeforeFitPage });
+      dualBeforeFitPage = null;
     }
     stack.setVisualScale(zoom.scale);
     stack.scheduleZoom();
