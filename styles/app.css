@@ -1521,3 +1521,17 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .sw svg { display: block; }
 .sw.is-on { box-shadow: none; }
+
+/* 菜单行距收紧 */
+.menu-pair { padding: 2px 0; gap: 4px; }
+.menu-sep { margin: 4px 4px; }
+.menu-row { height: 32px; }
+.gtk-menu { padding: 5px; }
+/* 勾标外挂时按钮别裁切 */
+.sw { overflow: visible; }
+.theme-row { overflow: visible; }
+
+/* 分隔条稍宽一点，好抓 */
+.body { grid-template-columns: var(--w-side) 7px minmax(0, 1fr) 7px var(--w-panel); }
+.splitter { cursor: col-resize; }
+.splitter:hover::after, .splitter.is-dragging::after { content: ''; position: absolute; inset: 0 -2px; background: var(--accent); opacity: .35; border-radius: 2px; }

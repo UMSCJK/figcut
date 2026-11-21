@@ -530,6 +530,7 @@ export function boot(opts = {}) {
     svg.setAttribute('viewBox', '0 0 44 44');
     svg.setAttribute('width', '44');
     svg.setAttribute('height', '44');
+    svg.style.overflow = 'visible';
 
     const defs = doc.createElementNS(NS, 'defs');
     const clip = doc.createElementNS(NS, 'clipPath');
@@ -571,18 +572,18 @@ export function boot(opts = {}) {
 
     if (on) {
       const badge = doc.createElementNS(NS, 'circle');
-      badge.setAttribute('cx', '33.5');
-      badge.setAttribute('cy', '32.5');
-      badge.setAttribute('r', '6.5');
+      badge.setAttribute('cx', '46');
+      badge.setAttribute('cy', '35');
+      badge.setAttribute('r', '8');
       badge.setAttribute('fill', 'var(--accent)');
       badge.setAttribute('stroke', 'var(--card)');
-      badge.setAttribute('stroke-width', '1.5');
+      badge.setAttribute('stroke-width', '2');
       svg.appendChild(badge);
       const tick = doc.createElementNS(NS, 'path');
-      tick.setAttribute('d', 'M30.6 32.6l2 2 3.6-3.9');
+      tick.setAttribute('d', 'M42.4 35.2l2.4 2.4 4.2-4.6');
       tick.setAttribute('fill', 'none');
       tick.setAttribute('stroke', '#fff');
-      tick.setAttribute('stroke-width', '1.7');
+      tick.setAttribute('stroke-width', '2');
       tick.setAttribute('stroke-linecap', 'round');
       tick.setAttribute('stroke-linejoin', 'round');
       svg.appendChild(tick);
@@ -1641,8 +1642,15 @@ export function boot(opts = {}) {
       const dx = ev.clientX - start.x;
       const raw = side === 'left' ? start.w + dx : start.w - dx;
       const vw = window.innerWidth;
+      const minCanvas = 420;
+      const otherW = side === 'left'
+        ? (layout.rightCollapsed ? 48 : shell.panelRight.getBoundingClientRect().width)
+        : (layout.leftCollapsed ? 48 : shell.panelLeft.getBoundingClientRect().width);
       const min = side === 'left' ? 120 : 180;
-      const max = side === 'left' ? 360 : Math.max(240, Math.min(560, Math.floor(vw * 0.45)));
+      // 上限按「窗口 - 另一侧 - 画布最小宽度」算，避免拖动时被二次夹紧来回跳
+      const max = side === 'left'
+        ? Math.max(min, Math.min(420, vw - otherW - minCanvas - 24))
+        : Math.max(min, Math.min(560, vw - otherW - minCanvas - 24));
       const w = Math.round(Math.max(min, Math.min(max, raw)));
       if (side === 'left') {
         layout.side = w;
