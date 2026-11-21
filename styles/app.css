@@ -1468,3 +1468,13 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 /* 勾标回到上一版位置 */
 .sw-badge { left: 27px; top: 14px; }
+
+/* 左栏缩略图不许超出栏宽；双列用 minmax(0,1fr) 防止撑破 */
+.page-item { max-width: 100%; overflow: hidden; }
+.page-frame { width: 100%; }
+.page-thumb { width: 100%; height: auto; display: block; }
+.page-list.is-double { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.page-list { max-width: 100%; }
+
+/* 缩略图列表：条目不参与 flex 收缩，否则会被压扁 */
+.page-list > .page-item { flex: 0 0 auto; }

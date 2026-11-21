@@ -303,22 +303,23 @@ export function boot(opts = {}) {
   }
 
   // 左栏缩略图：直接从已渲染的页位图缩一份
-  const thumbPending = new Set();
+  const thumbAttempts = new Map();
 
   function thumbFor(no) {
     const p = stack.pages.find((x) => x.no === no);
     if (!p || !p.canvas || !p.canvas.width) {
-      // 位图还没画好：等它好了强制重建一次列表，否则缩略图会一直空着
-      if (!thumbPending.has(no)) {
-        thumbPending.add(no);
+      // 位图还没画好：最多重试 8 次，避免缩略图永远是空白块
+      const n = (thumbAttempts.get(no) || 0) + 1;
+      if (n <= 8) {
+        thumbAttempts.set(no, n);
         setTimeout(() => {
-          thumbPending.delete(no);
           lastListSig = '';
           render();
-        }, 250);
+        }, 220 * n);
       }
       return null;
     }
+    thumbAttempts.delete(no);
     const W = 300;
     const H = Math.round((W * 842) / 595);
     const c = document.createElement('canvas');
@@ -1630,7 +1631,9 @@ export function boot(opts = {}) {
   const DOUBLE_MIN = 288;
 
   function effectiveCols() {
-    return layout.sideCols === 2 ? 2 : 1;
+    if (layout.sideCols !== 2) return 1;
+    const w = shell.panelLeft.getBoundingClientRect().width;
+    return w >= 200 ? 2 : 1;
   }
 
   function updateColsBtn() {
