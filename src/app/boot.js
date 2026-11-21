@@ -69,6 +69,7 @@ export function boot(opts = {}) {
   let currentName = 'figures';
   let lastPt = null;
   let liveRaf = 0;
+  let refreshTextTimer = 0;
 
   function download(bytes, filename) {
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return false;
@@ -583,9 +584,9 @@ export function boot(opts = {}) {
     return btn;
   };
 
-  toolButton(ICONS.select, '选择 (V)', 'select');
-  toolButton(ICONS.rect, '矩形 (R)', 'rect');
-  toolButton(ICONS.poly, '多边形 (G)', 'poly');
+  toolButton(ICONS.select, '选择 (Q)', 'select');
+  toolButton(ICONS.rect, '矩形 (W)', 'rect');
+  toolButton(ICONS.poly, '多边形 (E)', 'poly');
   markTool(ed.tool);
 
   function pointOf(ev) {
@@ -746,6 +747,23 @@ export function boot(opts = {}) {
   const lbNo = document.getElementById('lb-no');
   let lbPage = 1;
   let lbMode = 'page'; // 'page' = PDF 页预览，'figure' = 单个 figure 预览
+  let lbZoom = 1;
+
+  // 让大图先适配窗口，之后滚轮可缩放、按住拖动平移
+  function fitLbZoom() {
+    const inner = document.querySelector('.lightbox-inner');
+    if (!inner || !lbCanvas.width) return;
+    const availW = Math.min(window.innerWidth * 0.94, inner.clientWidth || window.innerWidth * 0.94);
+    const availH = window.innerHeight * 0.84;
+    lbZoom = Math.min(1, availW / lbCanvas.width, availH / lbCanvas.height);
+    if (!(lbZoom > 0)) lbZoom = 1;
+    applyLbZoom();
+  }
+
+  function applyLbZoom() {
+    lbCanvas.style.width = Math.round(lbCanvas.width * lbZoom) + 'px';
+    lbCanvas.style.height = Math.round(lbCanvas.height * lbZoom) + 'px';
+  }
 
   async function drawLightbox() {
     const p = stack.pages.find((x) => x.no === lbPage);
@@ -761,6 +779,7 @@ export function boot(opts = {}) {
     ctx.fillRect(0, 0, lbCanvas.width, lbCanvas.height);
     await p.page.render({ canvasContext: ctx, viewport: vp }).promise;
     lbNo.textContent = lbPage + ' / ' + stack.pages.length;
+    fitLbZoom();
   }
 
   function openLightbox(no) {
@@ -841,6 +860,7 @@ export function boot(opts = {}) {
     );
     ctx.restore();
     lbNo.textContent = labelOfKind(region);
+    fitLbZoom();
   }
 
 
@@ -850,6 +870,40 @@ export function boot(opts = {}) {
   }
 
   if (lb) {
+    // 滚轮缩放
+    lb.addEventListener('wheel', (ev) => {
+      if (lb.hidden) return;
+      ev.preventDefault();
+      const next = lbZoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12);
+      lbZoom = Math.min(8, Math.max(0.1, next));
+      applyLbZoom();
+    }, { passive: false });
+
+    // 拖动平移
+    let pan = null;
+    lbCanvas.addEventListener('pointerdown', (ev) => {
+      pan = { x: ev.clientX, y: ev.clientY, left: lb.scrollLeft, top: lb.scrollTop };
+      lbCanvas.classList.add('is-panning');
+      if (lbCanvas.setPointerCapture) lbCanvas.setPointerCapture(ev.pointerId);
+    });
+    lbCanvas.addEventListener('pointermove', (ev) => {
+      if (!pan) return;
+      lb.scrollLeft = pan.left - (ev.clientX - pan.x);
+      lb.scrollTop = pan.top - (ev.clientY - pan.y);
+    });
+    const endPan = () => {
+      pan = null;
+      lbCanvas.classList.remove('is-panning');
+    };
+    lbCanvas.addEventListener('pointerup', endPan);
+    lbCanvas.addEventListener('pointercancel', endPan);
+
+    // 双击：在「适应窗口」和 100% 之间切
+    lbCanvas.addEventListener('dblclick', () => {
+      lbZoom = lbZoom > 1.01 ? 1 : Math.max(1, 1 / lbZoom);
+      applyLbZoom();
+    });
+
     lb.addEventListener('click', (ev) => {
       if (ev.target === lb) closeLightbox();
     });
@@ -1070,6 +1124,9 @@ export function boot(opts = {}) {
   subscribe(zoom, () => {
     stack.setVisualScale(zoom.scale);
     stack.scheduleZoom();
+    // 缩放停稳后把文本层重排，保证透明文字始终贴在字上
+    clearTimeout(refreshTextTimer);
+    refreshTextTimer = setTimeout(() => stack.refreshTextLayers(), 320);
   });
 
   // ---- 最近打开（启动时在中间列出来） ----
@@ -1266,7 +1323,7 @@ export function boot(opts = {}) {
     colsBtn = doc.createElement('button');
     colsBtn.type = 'button';
     colsBtn.className = 'icon-btn';
-    colsBtn.innerHTML = ICONS.grid;
+    colsBtn.innerHTML = ICONS.columns;
     sideHead.appendChild(colsBtn);
     colsBtn.addEventListener('click', () => {
       if (layout.sideCols === 2) {

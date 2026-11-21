@@ -7,10 +7,12 @@ test('shortcuts: 基础键位', () => {
   assert(resolveKey(ev('n')) === 'page.next');
   assert(resolveKey(ev('p')) === 'page.prev');
   assert(resolveKey(ev('f')) === 'zoom.fitPage');
-  assert(resolveKey(ev('w')) === 'zoom.fitWidth');
+  assert(resolveKey(ev('s')) === 'zoom.fitWidth');
   assert(resolveKey(ev('+')) === 'zoom.in');
   assert(resolveKey(ev('-')) === 'zoom.out');
-  assert(resolveKey(ev('r')) === 'tool.rect');
+  assert(resolveKey(ev('q')) === 'tool.select');
+  assert(resolveKey(ev('w')) === 'tool.rect');
+  assert(resolveKey(ev('e')) === 'tool.poly');
 });
 
 test('shortcuts: Ctrl 组合', () => {

@@ -2,13 +2,13 @@
 // 状态：已实现。resolveKey 是纯函数，绑定时只负责 preventDefault + 分发。
 
 export const KEYMAP = {
-  v: 'tool.select',
-  r: 'tool.rect',
-  g: 'tool.poly',
+  q: 'tool.select',
+  w: 'tool.rect',
+  e: 'tool.poly',
   n: 'page.next',
   p: 'page.prev',
   f: 'zoom.fitPage',
-  w: 'zoom.fitWidth',
+  s: 'zoom.fitWidth',
   '+': 'zoom.in',
   '=': 'zoom.in',
   '-': 'zoom.out',

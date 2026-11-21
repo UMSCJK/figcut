@@ -62,8 +62,10 @@ export function createPageStack(opts) {
     }
     const host = p.textEl;
     host.textContent = '';
-    host.style.width = p.canvas.style.width;
-    host.style.height = p.canvas.style.height;
+    // 尺寸跟 .page 走（canvas 现在是 100% 填充，style.width 是空的）
+    const box = p.wrap.getBoundingClientRect();
+    host.style.width = p.wrap.style.width || Math.round(box.width) + 'px';
+    host.style.height = p.wrap.style.height || Math.round(box.height) + 'px';
     const vp = p.page.getViewport({ scale: 1 });
     for (const item of p.textItems.items) {
       if (!item.str || !item.str.trim()) continue;
@@ -200,11 +202,23 @@ export function createPageStack(opts) {
     });
   }
 
+  // 缩放后重排文本层（否则透明文字会停在旧缩放位置，选不中）
+  async function refreshTextLayers() {
+    for (const p of pages) {
+      if (!p.textEl || !p.textItems) continue;
+      const vp1 = p.page.getViewport({ scale: 1 });
+      const width = parseFloat(p.wrap.style.width) || vp1.width;
+      const scale = width / vp1.width;
+      await buildTextLayer(p, scale);
+    }
+  }
+
   return {
     root,
     pages,
     view,
     mount,
+    refreshTextLayers,
     setCurrent,
     applyLayout,
     visibleRects,

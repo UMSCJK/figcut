@@ -784,8 +784,27 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 
 .lightbox[hidden] { display: none; }
 
-.lightbox-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 96vw; max-height: 96vh; }
-.lightbox-canvas { max-width: 94vw; max-height: 86vh; background: #fff; border-radius: 6px; box-shadow: var(--shadow-2); }
+.lightbox-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 96vw;
+  max-height: 94vh;
+  overflow: auto;
+}
+
+.lightbox-canvas {
+  max-width: none;
+  max-height: none;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: var(--shadow-2);
+  cursor: grab;
+}
+
+.lightbox-canvas.is-panning { cursor: grabbing; }
 .lightbox-bar { display: flex; align-items: center; gap: 10px; color: #fff; }
 .lightbox-bar .icon-btn { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; }
 .lightbox-no { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
