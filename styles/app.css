@@ -1076,3 +1076,30 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .side-head { order: 0; flex: none; }
 #preview-host, .region-list, .panel > .region-list { order: 1; flex: 1 1 auto; min-height: 0; }
 .rail-tools { order: 0; }
+
+/* 底栏离圆角/安全区留一点，不要贴死 */
+.side-foot {
+  margin: 0 6px calc(6px + env(safe-area-inset-bottom, 0px));
+  height: 32px;
+  flex-basis: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.side-foot:hover { background: var(--hover); }
+
+/* 顶栏收一收，别那么松 */
+.topbar { padding: 0 8px; gap: 6px; }
+.topbar .cluster { gap: 4px; }
+.topbar .btn { height: 28px; padding: 0 10px; }
+
+/* 右栏密一点：行间距拉开，别挤成一坨 */
+.region-list { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px; }
+.region-row { padding: 8px; gap: 8px; }
+.region-row .inspector { gap: 6px; }
+.panel .side-head { padding: 10px 12px 8px; }
+
+/* 右栏给控件留出可读宽度 */
+.region-row { grid-template-columns: 10px 56px minmax(0, 1fr) auto; }
+.region-thumb { width: 56px; }

@@ -855,7 +855,16 @@ export function boot(opts = {}) {
   async function openFigureLightbox(region) {
     if (!lb || !region) return;
     const p = stack.pages.find((x) => x.no === region.page);
-    const box = region.box || region.ink || (region.shape === 'poly' ? null : region.rect);
+    // 有时量测还没跑完（box 为空），先补量一次，别掉回整页预览
+    if (!region.box && maskCache.has(region.page)) {
+      applyMeasure(region, maskCache.get(region.page));
+    }
+    let box = region.box || region.ink || (region.shape === 'poly' ? null : region.rect);
+    if (!box && !maskCache.has(region.page)) {
+      const entry = await pageMask(region.page);
+      if (entry) applyMeasure(region, entry);
+      box = region.box || region.ink || (region.shape === 'poly' ? null : region.rect);
+    }
     if (!p || !box) {
       openLightbox(region.page);
       return;
@@ -933,16 +942,21 @@ export function boot(opts = {}) {
 
     // 拖动平移（任意缩放级别都能拖）
     let pan = null;
+    let dragged = false;
     lbStage.addEventListener('pointerdown', (ev) => {
       if (ev.button !== 0) return;
       pan = { x: ev.clientX, y: ev.clientY, ox: lbView.x, oy: lbView.y };
+      dragged = false;
       lbStage.classList.add('is-panning');
       if (lbStage.setPointerCapture) lbStage.setPointerCapture(ev.pointerId);
     });
     lbStage.addEventListener('pointermove', (ev) => {
       if (!pan) return;
-      lbView.x = pan.ox + (ev.clientX - pan.x);
-      lbView.y = pan.oy + (ev.clientY - pan.y);
+      const dx = ev.clientX - pan.x;
+      const dy = ev.clientY - pan.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) dragged = true;
+      lbView.x = pan.ox + dx;
+      lbView.y = pan.oy + dy;
       lbApply();
     });
     const endPan = () => {
@@ -958,7 +972,12 @@ export function boot(opts = {}) {
       else lbZoomAt(1 / lbView.scale, ev.clientX, ev.clientY);
     });
 
+    // 只有「点一下」才关闭；拖动松手不算点击
     lb.addEventListener('click', (ev) => {
+      if (dragged) {
+        dragged = false;
+        return;
+      }
       if (ev.target === lb || ev.target === lbStage) closeLightbox();
     });
     document.addEventListener('keydown', (ev) => {
@@ -1298,7 +1317,7 @@ export function boot(opts = {}) {
     // 保证中间画布至少 420px，侧栏再大也不许把画布挤没
     const minCanvas = 420;
     const wantSide = layout.side || 210;
-    const wantPanel = layout.panel || 210;
+    const wantPanel = layout.panel || 240;
     const avail = Math.max(240, vw - minCanvas - 10);
     let side = wantSide;
     let panel = wantPanel;
