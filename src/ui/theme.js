@@ -6,8 +6,8 @@ export const PDF_MODES = ['auto', 'normal', 'invert'];
 
 export function createTheme(opts = {}) {
   return {
-    ui: UI_MODES.includes(opts.ui) ? opts.ui : 'system',
-    pdf: PDF_MODES.includes(opts.pdf) ? opts.pdf : 'auto',
+    ui: UI_MODES.includes(opts.ui) ? opts.ui : 'light',
+    pdf: PDF_MODES.includes(opts.pdf) ? opts.pdf : 'normal',
   };
 }
 

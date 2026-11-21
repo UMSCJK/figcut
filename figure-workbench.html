@@ -5030,8 +5030,8 @@ const PDF_MODES = ['auto', 'normal', 'invert'];
 
 function createTheme(opts = {}) {
   return {
-    ui: UI_MODES.includes(opts.ui) ? opts.ui : 'system',
-    pdf: PDF_MODES.includes(opts.pdf) ? opts.pdf : 'auto',
+    ui: UI_MODES.includes(opts.ui) ? opts.ui : 'light',
+    pdf: PDF_MODES.includes(opts.pdf) ? opts.pdf : 'normal',
   };
 }
 
@@ -5665,9 +5665,9 @@ function boot(opts = {}) {
   menu.className = 'gtk-menu';
   menu.hidden = true;
 
-  // 顺序照 editor-theme-selector.ui：follow / light / dark
+  // 左=混合(UI深/PDF浅)、中=白(UI浅/PDF浅)、右=黑(UI深/PDF深)
   const APPEARANCES = [
-    { ui: 'system', pdf: 'auto', cls: 'follow', title: '跟随系统' },
+    { ui: 'dark', pdf: 'normal', cls: 'follow', title: '深色界面 · 浅色 PDF' },
     { ui: 'light', pdf: 'normal', cls: 'light', title: '浅色界面 · 浅色 PDF' },
     { ui: 'dark', pdf: 'invert', cls: 'dark', title: '深色界面 · 深色 PDF' },
   ];
@@ -5904,9 +5904,8 @@ function boot(opts = {}) {
     const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
     for (const { sw, item } of swatches) {
-      const active = item.ui === 'system'
-        ? (theme.ui || 'system') === 'system'
-        : (theme.ui || 'system') === item.ui;
+      const active = resolvedUi(theme, prefersDark()) === item.ui
+        && isInverted(theme, prefersDark()) === (item.pdf === 'invert');
       sw.classList.toggle('is-on', active);
       sw.textContent = '';
       sw.appendChild(swatchSvg(item.cls, active));

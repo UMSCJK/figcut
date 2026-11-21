@@ -1,16 +1,21 @@
 import { test, assert } from '../tools/testkit.mjs';
 import { createTheme, cycleUi, cyclePdfPreview, resolvedUi, isInverted, applyTheme } from '../src/ui/theme.js';
 
-test('theme: 界面三态循环 跟随系统→浅→深', () => {
+test('theme: 默认浅色界面 + 浅色 PDF', () => {
   const t = createTheme();
-  assert(t.ui === 'system');
+  assert(t.ui === 'light');
+  assert(t.pdf === 'normal');
+});
+
+test('theme: 界面三态循环 跟随系统→浅→深', () => {
+  const t = createTheme({ ui: 'system' });
   assert(cycleUi(t) === 'light');
   assert(cycleUi(t) === 'dark');
   assert(cycleUi(t) === 'system');
 });
 
 test('theme: PDF 三态循环 跟随界面→正常→反相', () => {
-  const t = createTheme();
+  const t = createTheme({ pdf: 'auto' });
   assert(t.pdf === 'auto');
   assert(cyclePdfPreview(t) === 'normal');
   assert(cyclePdfPreview(t) === 'invert');
@@ -18,7 +23,7 @@ test('theme: PDF 三态循环 跟随界面→正常→反相', () => {
 });
 
 test('theme: 跟随系统时按浅色/深色解析', () => {
-  const t = createTheme();
+  const t = createTheme({ ui: 'system' });
   assert(resolvedUi(t, false) === 'light');
   assert(resolvedUi(t, true) === 'dark');
 });
