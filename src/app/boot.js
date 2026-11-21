@@ -418,8 +418,6 @@ export function boot(opts = {}) {
       return;
     }
     el.textContent = '第 ' + ed.page + ' / ' + total + ' 页 · ' + ed.regions.length + ' 个标注 · ' + settings.dpi + ' DPI · 边距 ' + settings.margin + ' pt';
-    const pageEl = document.querySelector('.page-jump .pj-label');
-    if (pageEl) pageEl.textContent = ed.page + ' / ' + total;
   }
 
   function toggleRightPanel() {
@@ -465,11 +463,87 @@ export function boot(opts = {}) {
   }
 
   // ---- 顶栏：左 打开▾ + 工具 / 中 两行标题 / 右 页码·侧栏·汉堡·导出 ----
-  const openBtn = addButton(shell, 'left', '打开', async () => {
-    const file = await chooseFile();
-    if (file) load(file);
-  }, { title: '打开 PDF（Ctrl+O）', kind: 'btn' });
+  // 打开：GtkMenuButton 形态（点开是最近文件，最后一行才是「打开…」）
+  const openBtn = addButton(shell, 'left', '打开', () => toggleOpenPopover(), {
+    title: '最近打开 (Ctrl+O)',
+    kind: 'btn',
+  });
   openBtn.classList.add('menubtn');
+  openBtn.classList.add('has-arrow');
+
+  const openPop = doc.createElement('div');
+  openPop.className = 'open-pop';
+  openPop.hidden = true;
+  document.body.appendChild(openPop);
+
+  function renderOpenPopover() {
+    openPop.textContent = '';
+    const list = readRecent();
+    if (list.length) {
+      const head = doc.createElement('div');
+      head.className = 'pop-head';
+      head.textContent = '最近打开';
+      openPop.appendChild(head);
+      for (const item of list.slice(0, 6)) {
+        const row = doc.createElement('button');
+        row.type = 'button';
+        row.className = 'pop-item';
+        row.textContent = item.name;
+        const meta = doc.createElement('span');
+        meta.className = 'pop-meta';
+        meta.textContent = (item.pages || '?') + ' 页';
+        row.appendChild(meta);
+        row.addEventListener('click', async () => {
+          closeOpenPopover();
+          const direct = await openRecent(item);
+          if (direct) load(direct);
+          else {
+            toast('这一份需要重新选择一次');
+            const f = await chooseFile();
+            if (f) load(f);
+          }
+        });
+        openPop.appendChild(row);
+      }
+    }
+    const pick = doc.createElement('button');
+    pick.type = 'button';
+    pick.className = 'pop-item';
+    pick.textContent = '打开文件…';
+    const accel = doc.createElement('span');
+    accel.className = 'pop-meta';
+    accel.textContent = 'Ctrl+O';
+    pick.appendChild(accel);
+    pick.addEventListener('click', async () => {
+      closeOpenPopover();
+      const file = await chooseFile();
+      if (file) load(file);
+    });
+    openPop.appendChild(pick);
+  }
+
+  function openOpenPopover() {
+    renderOpenPopover();
+    const r = openBtn.getBoundingClientRect();
+    openPop.style.top = Math.round(r.bottom + 6) + 'px';
+    openPop.style.left = Math.round(r.left) + 'px';
+    openPop.hidden = false;
+    openBtn.classList.add('is-open');
+    document.addEventListener('pointerdown', onOpenOutside, true);
+  }
+  function closeOpenPopover() {
+    openPop.hidden = true;
+    openBtn.classList.remove('is-open');
+    document.removeEventListener('pointerdown', onOpenOutside, true);
+  }
+  function onOpenOutside(ev) {
+    if (openPop.contains(ev.target) || openBtn.contains(ev.target)) return;
+    closeOpenPopover();
+  }
+  function toggleOpenPopover() {
+    if (openPop.hidden) openOpenPopover();
+    else closeOpenPopover();
+  }
 
   const undoUi = () => {
     const prev = undo(hist);
@@ -485,36 +559,6 @@ export function boot(opts = {}) {
     ed.selectedId = null;
     render();
   };
-
-  // 页码选择器：‹ 1 / 14 ›
-  const pageBox = doc.createElement('div');
-  pageBox.className = 'page-jump';
-  const pagePrev = doc.createElement('button');
-  pagePrev.type = 'button';
-  pagePrev.className = 'pj-btn';
-  pagePrev.textContent = '‹';
-  pagePrev.title = '上一页 (P)';
-  const pageLabel = doc.createElement('span');
-  pageLabel.className = 'pj-label';
-  pageLabel.textContent = '– / –';
-  const pageNext = doc.createElement('button');
-  pageNext.type = 'button';
-  pageNext.className = 'pj-btn';
-  pageNext.textContent = '›';
-  pageNext.title = '下一页 (N)';
-  pageBox.append(pagePrev, pageLabel, pageNext);
-  shell.right.appendChild(pageBox);
-  pagePrev.addEventListener('click', () => goPage(ed.page - 1));
-  pageNext.addEventListener('click', () => goPage(ed.page + 1));
-
-  // 侧栏开关（PpsDocumentView 的 sidebar_button，放 end）
-  const sideBtn = doc.createElement('button');
-  sideBtn.type = 'button';
-  sideBtn.className = 'icon-btn';
-  sideBtn.title = '切换侧边栏';
-  sideBtn.innerHTML = ICONS.sidebarRight;
-  sideBtn.addEventListener('click', () => toggleRightPanel());
-  shell.right.appendChild(sideBtn);
 
   // 汉堡菜单
   const menuBtn = doc.createElement('button');
@@ -541,7 +585,7 @@ export function boot(opts = {}) {
 
   const APPEARANCES = [
     { ui: 'light', pdf: 'normal', cls: 'light', title: '浅色界面 · 浅色 PDF' },
-    { ui: 'auto', pdf: 'auto', cls: 'follow', title: '跟随系统' },
+    { ui: 'system', pdf: 'auto', cls: 'follow', title: '跟随系统' },
     { ui: 'dark', pdf: 'invert', cls: 'dark', title: '深色界面 · 深色 PDF' },
   ];
   const themeRow = doc.createElement('div');
@@ -595,10 +639,18 @@ export function boot(opts = {}) {
   menu.appendChild(marginRow.el);
   menu.appendChild(sepLine());
 
-  const undoRow = menuRow('撤销', '', null, () => { undoUi(); closeMenu(); });
-  const redoRow = menuRow('重做', '', null, () => { redoUi(); closeMenu(); });
+  const undoRow = menuRow('撤销', 'Ctrl+Z', null, () => { undoUi(); closeMenu(); });
+  const redoRow = menuRow('重做', 'Ctrl+Y', null, () => { redoUi(); closeMenu(); });
   menu.appendChild(undoRow.el);
   menu.appendChild(redoRow.el);
+  menu.appendChild(sepLine());
+  menu.appendChild(menuRow('连续滚动', 'C', null, () => { stack.applyLayout({ continuous: !stack.view.continuous }); closeMenu(); }).el);
+  menu.appendChild(menuRow('双页模式', 'D', null, () => { stack.applyLayout({ dual: !stack.view.dual }); closeMenu(); }).el);
+  menu.appendChild(menuRow('奇数页在左', 'O', null, () => { stack.applyLayout({ oddLeft: !stack.view.oddLeft }); closeMenu(); }).el);
+  menu.appendChild(sepLine());
+  menu.appendChild(menuRow('适应页宽', 'S', null, () => { setFit(zoom, 'width', fitDims()); closeMenu(); }).el);
+  menu.appendChild(menuRow('适应页面', 'F', null, () => { setFit(zoom, 'page', fitDims()); closeMenu(); }).el);
+  menu.appendChild(menuRow('导出 ZIP', 'Ctrl+E', null, () => { closeMenu(); doExport(); }).el);
 
   document.body.appendChild(menu);
 
@@ -647,13 +699,10 @@ export function boot(opts = {}) {
     const ui = resolvedUi(theme, prefersDark());
     const inv = isInverted(theme, prefersDark());
     for (const { sw, item } of swatches) {
-      const on = item.ui === 'auto'
-        ? theme.ui === 'auto'
-        : item.ui === ui && (item.pdf === 'invert') === inv;
-      sw.classList.toggle('is-on', !!on);
+      // 三个圆点就是三态：跟随系统 / 浅 / 深，只看 ui，避免同时亮两个
+      sw.classList.toggle('is-on', (theme.ui || 'system') === item.ui);
     }
     zLabel.textContent = Math.round(zoom.scale * 100) + '%';
-    pageLabel.textContent = ed.page + ' / ' + (stack.pages.length || 0);
   }
 
   function stepZoomBy(dir) {

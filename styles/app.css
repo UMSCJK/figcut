@@ -1208,3 +1208,54 @@ input, textarea, .preview-canvas, .textlayer, .textlayer span { user-select: tex
 .menu-row { height: 34px; }
 .z-btn { width: 34px; height: 34px; }
 .z-pill { height: 34px; }
+
+/* 打开菜单按钮的 popover */
+.open-pop {
+  position: fixed;
+  z-index: 90;
+  min-width: 230px;
+  max-width: 320px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow-2);
+}
+
+.open-pop[hidden] { display: none; }
+.pop-head { font-size: 9pt; color: var(--text-3); padding: 4px 10px 6px; }
+
+.pop-item {
+  width: 100%;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5pt;
+  text-align: left;
+}
+
+.pop-item:hover { background: var(--hover); }
+.pop-meta { margin-left: auto; color: var(--text-3); font-size: 9.5pt; font-variant-numeric: tabular-nums; }
+
+.btn.menubtn.has-arrow::after {
+  content: '';
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4.5px solid currentColor;
+  opacity: 0.75;
+}
+
+.menu-row .menu-value { font-size: 9.5pt; }
+
+/* 菜单整体加宽一点，放得下快捷键列 */
+.gtk-menu { width: 262px; }
